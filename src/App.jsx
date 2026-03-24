@@ -1,12 +1,23 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { useSelector } from "react-redux";
 import LoginPage from "./pages/AdminLogin";
 import DashboardPage from "./pages/DashboardPage";
 
 function ProtectedRoute({ children }) {
-    const isAuthenticated = localStorage.getItem("saye_auth") === "true";
+    const { isAuthenticated, token } = useSelector((state) => state.auth);
 
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !token) {
         return <Navigate to="/" replace />;
+    }
+
+    return children;
+}
+
+function PublicRoute({ children }) {
+    const { isAuthenticated, token } = useSelector((state) => state.auth);
+
+    if (isAuthenticated && token) {
+        return <Navigate to="/dashboard" replace />;
     }
 
     return children;
@@ -15,7 +26,15 @@ function ProtectedRoute({ children }) {
 export default function App() {
     return (
         <Routes>
-            <Route path="/" element={<LoginPage />} />
+            <Route
+                path="/"
+                element={
+                    <PublicRoute>
+                        <LoginPage />
+                    </PublicRoute>
+                }
+            />
+
             <Route
                 path="/dashboard"
                 element={

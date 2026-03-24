@@ -1,18 +1,33 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Landmark, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import { clearError, login } from "../features/auth/authSlice";
+import { useNavigate } from "react-router-dom";
 
 export default function AdminLogin() {
+    const dispatch = useDispatch();
     const navigate = useNavigate();
+
+    const { isLoading, error, isAuthenticated, token } = useSelector(
+        (state) => state.auth
+    );
 
     const [formData, setFormData] = useState({
         username: "",
         password: "",
     });
 
-    const [showPassword, setShowPassword] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState("");
+    useEffect(() => {
+        if (isAuthenticated && token) {
+            navigate("/dashboard", { replace: true });
+        }
+    }, [isAuthenticated, token, navigate]);
+
+    useEffect(() => {
+        return () => {
+            dispatch(clearError());
+        };
+    }, [dispatch]);
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -22,30 +37,13 @@ export default function AdminLogin() {
         }));
     };
 
-    const handleSubmit = async (event) => {
+    const handleSubmit = (event) => {
         event.preventDefault();
-        setError("");
-        setIsLoading(true);
-
-        try {
-            if (!formData.username || !formData.password) {
-                throw new Error("Please enter your username and password.");
-            }
-
-            // Temporary login
-            // Later replace with backend call:
-            // POST /saye/v1/auth/login
-
-            localStorage.setItem("saye_auth", "true");
-            localStorage.setItem("saye_user", formData.username);
-
-            navigate("/dashboard");
-        } catch (err) {
-            setError(err.message || "Login failed.");
-        } finally {
-            setIsLoading(false);
-        }
+        dispatch(clearError());
+        dispatch(login(formData));
     };
+
+    const [showPassword, setShowPassword] = useState(false);
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
@@ -55,16 +53,17 @@ export default function AdminLogin() {
                         <Landmark className="h-6 w-6" />
                     </div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                        SAYE DIGIBOOK
+                        SAYE Financial Tool
                     </h1>
-                    <p className="mt-2 text-sm text-slate-500">
-                        Sign in to continue
-                    </p>
+                    <p className="mt-2 text-sm text-slate-500">Sign in to continue</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <div>
-                        <label htmlFor="username" className="mb-2 block text-sm font-medium text-slate-700">
+                        <label
+                            htmlFor="username"
+                            className="mb-2 block text-sm font-medium text-slate-700"
+                        >
                             Username
                         </label>
                         <input
@@ -79,7 +78,10 @@ export default function AdminLogin() {
                     </div>
 
                     <div>
-                        <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-700">
+                        <label
+                            htmlFor="password"
+                            className="mb-2 block text-sm font-medium text-slate-700"
+                        >
                             Password
                         </label>
                         <div className="relative">
