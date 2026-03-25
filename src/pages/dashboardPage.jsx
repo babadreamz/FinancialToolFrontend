@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     LayoutDashboard,
     PiggyBank,
@@ -18,22 +18,69 @@ import Savings from "../components/dashboard/savings";
 import Loans from "../components/dashboard/loans";
 import Investments from "../components/dashboard/investments";
 import FinancialStatement from "../components/dashboard/financialStatement";
-import { initialData } from "../lib/store";
+import { getActiveCustomers } from "../services/customerServices";
+
+function mapSaver(customer) {
+    return {
+        id: customer.id,
+        name: [customer.firstName, customer.middleName, customer.lastName]
+            .filter(Boolean)
+            .join(" "),
+        firstName: customer.firstName || "",
+        middleName: customer.middleName || "",
+        lastName: customer.lastName || "",
+        email: customer.email || "",
+        phone: customer.phoneNo || "",
+        whatsappNo: customer.whatsappNo || "",
+        accountId: customer.accountId || "",
+        balance: Number(customer.balance || 0),
+        status: customer.status || "active",
+        createdAt: customer.createdAt || customer.dateCreated || "",
+    };
+}
 
 export default function DashboardPage() {
-    const [data, setData] = useState(initialData);
+    const [data, setData] = useState({
+        savers: [],
+        savingsRecords: [],
+        loans: [],
+        loanRecords: [],
+        investors: [],
+        investments: [],
+        investmentReturns: [],
+    });
+
     const [activeTab, setActiveTab] = useState("dashboard");
-    const [quickAction, setQuickAction] = useState(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     const dispatch = useDispatch();
     const navigate = useNavigate();
 
-    const handleQuickAction = (tab, action) => {
-        setActiveTab(tab);
-        setQuickAction({ tab, action });
-        setTimeout(() => setQuickAction(null), 100);
-    };
+    useEffect(() => {
+        let ignore = false;
+
+        async function loadSavers() {
+            try {
+                const response = await getActiveCustomers();
+                const savers = Array.isArray(response) ? response.map(mapSaver) : [];
+
+                if (!ignore) {
+                    setData((prev) => ({
+                        ...prev,
+                        savers,
+                    }));
+                }
+            } catch (error) {
+                console.error("Failed to load active savers:", error);
+            }
+        }
+
+        loadSavers();
+
+        return () => {
+            ignore = true;
+        };
+    }, []);
 
     const handleLogout = async () => {
         await dispatch(logoutAsync());
@@ -74,8 +121,8 @@ export default function DashboardPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            <div className="flex min-h-screen">
+        <div className="min-h-screen bg-slate-50 overflow-x-hidden">
+            <div className="flex min-h-screen w-full">
                 {sidebarOpen && (
                     <div
                         className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -84,8 +131,8 @@ export default function DashboardPage() {
                 )}
 
                 <aside
-                    className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-slate-200 bg-white transition-transform duration-300 md:static md:z-auto md:w-64 ${
-                        sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+                    className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-slate-200 bg-white transition-transform duration-300 md:static md:z-auto md:w-64 md:translate-x-0 ${
+                        sidebarOpen ? "translate-x-0" : "-translate-x-full"
                     }`}
                 >
                     <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
@@ -97,6 +144,7 @@ export default function DashboardPage() {
                         <button
                             onClick={() => setSidebarOpen(false)}
                             className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+                            type="button"
                         >
                             <X className="h-5 w-5" />
                         </button>
@@ -112,6 +160,7 @@ export default function DashboardPage() {
                                         ? "bg-slate-900 text-white"
                                         : "text-slate-700 hover:bg-slate-100"
                                 }`}
+                                type="button"
                             >
                                 {item.icon}
                                 <span>{item.label}</span>
@@ -123,6 +172,7 @@ export default function DashboardPage() {
                         <button
                             onClick={handleLogout}
                             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                            type="button"
                         >
                             <LogOut className="h-5 w-5" />
                             <span>Logout</span>
@@ -130,7 +180,7 @@ export default function DashboardPage() {
                     </div>
                 </aside>
 
-                <div className="flex-1">
+                <div className="flex min-w-0 flex-1 flex-col">
                     <header className="border-b border-slate-200 bg-white">
                         <div className="flex items-center justify-between px-4 py-4 md:px-6">
                             <div>
@@ -145,22 +195,26 @@ export default function DashboardPage() {
                             <button
                                 onClick={() => setSidebarOpen(true)}
                                 className="rounded-xl border border-slate-200 p-2 text-slate-700 hover:bg-slate-100 md:hidden"
+                                type="button"
                             >
                                 <Menu className="h-5 w-5" />
                             </button>
                         </div>
                     </header>
 
-                    <main className="px-4 py-6 md:px-6">
+                    <main className="min-w-0 flex-1 px-4 py-6 md:px-6">
                         {activeTab === "dashboard" && (
-                            <Dashboard data={data} onQuickAction={handleQuickAction} />
+                            <Dashboard
+                                data={data}
+                                setData={setData}
+                            />
                         )}
 
                         {activeTab === "savings" && (
                             <Savings
                                 data={data}
                                 setData={setData}
-                                initialAction={quickAction?.tab === "savings" ? quickAction.action : null}
+                                initialAction={null}
                             />
                         )}
 
@@ -168,7 +222,7 @@ export default function DashboardPage() {
                             <Loans
                                 data={data}
                                 setData={setData}
-                                initialAction={quickAction?.tab === "loans" ? quickAction.action : null}
+                                initialAction={null}
                             />
                         )}
 

@@ -1,16 +1,7 @@
-import { useState } from "react";
-import { Plus, X, ArrowLeft, Calendar, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "../ui/dialog";
 import {
     Select,
     SelectContent,
@@ -27,193 +18,370 @@ import {
     TableRow,
 } from "../ui/table";
 import { formatCurrency, formatDate } from "../../lib/store";
+import * as customerServices from "../../services/customerServices";
 
-export default function Investments({ data, setData }) {
-    const [selectedInvestment, setSelectedInvestment] = useState(null);
-    const [showNewInvestorDialog, setShowNewInvestorDialog] = useState(false);
-    const [showNewInvestmentDialog, setShowNewInvestmentDialog] = useState(false);
-    const [showReturnDialog, setShowReturnDialog] = useState(false);
+function buildFullName(customer) {
+    return [customer.firstName, customer.middleName, customer.lastName]
+        .filter(Boolean)
+        .join(" ");
+}
 
-    const [investorName, setInvestorName] = useState("");
-    const [investorPhone, setInvestorPhone] = useState("");
+function mapSaver(customer) {
+    return {
+        id: customer.id,
+        name: buildFullName(customer),
+        phone: customer.phoneNo || customer.phone || "-",
+        balance: Number(customer.balance || 0),
+        status: customer.status || "active",
+        createdAt: customer.createdAt || customer.dateCreated || null,
+    };
+}
 
-    const [selectedInvestor, setSelectedInvestor] = useState("");
-    const [investmentAmount, setInvestmentAmount] = useState("");
-    const [returnRate, setReturnRate] = useState("15");
-    const [investmentEndDate, setInvestmentEndDate] = useState("");
+function mapTransaction(record) {
+    return {
+        id: record.id,
+        saverId: Number(record.saverId || record.customerId || record.customer?.id),
+        type: String(record.type || record.transactionType || "").toLowerCase(),
+        amount: Number(record.amount || 0),
+        date:
+            record.date ||
+            record.createdAt ||
+            record.transactionDate ||
+            new Date().toISOString(),
+        cancelled: Boolean(record.cancelled || record.isCancelled),
+    };
+}
 
-    const [returnAmount, setReturnAmount] = useState("");
+export default function FinancialStatement({ data }) {
+    const [selectedSaver, setSelectedSaver] = useState("");
+    const [savers, setSavers] = useState([]);
+    const [records, setRecords] = useState([]);
+    const [loadingSavers, setLoadingSavers] = useState(false);
+    const [loadingRecords, setLoadingRecords] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleRegisterInvestor = () => {
-        if (!investorName || !investorPhone) return;
+    useEffect(() => {
+        let ignore = false;
 
-        const newInvestor = {
-            id: Math.max(...data.investors.map((i) => i.id), 0) + 1,
-            name: investorName,
-            phone: investorPhone,
-            status: "active",
-            createdAt: new Date().toISOString().split("T")[0],
+        async function loadSavers() {
+            try {
+                setLoadingSavers(true);
+                setError("");
+
+                const fallbackSavers = Array.isArray(data?.savers) ? data.savers : [];
+
+                if (typeof customerServices.getActiveCustomers === "function") {
+                    const response = await customerServices.getActiveCustomers();
+                    if (!ignore) {
+                        setSavers(Array.isArray(response) ? response.map(mapSaver) : []);
+                    }
+                    return;
+                }
+
+                if (!ignore) {
+                    setSavers(fallbackSavers);
+                }
+            } catch (err) {
+                if (!ignore) {
+                    setError(
+                        err?.response?.data?.message ||
+                        err?.response?.data?.error ||
+                        "Failed to load savers."
+                    );
+                    setSavers(Array.isArray(data?.savers) ? data.savers : []);
+                }
+            } finally {
+                if (!ignore) {
+                    setLoadingSavers(false);
+                }
+            }
+        }
+
+        loadSavers();
+        return () => {
+            ignore = true;
         };
+    }, [data?.savers]);
 
-        setData({
-            ...data,
-            investors: [...data.investors, newInvestor],
-        });
+    useEffect(() => {
+        let ignore = false;
 
-        setShowNewInvestorDialog(false);
-        setInvestorName("");
-        setInvestorPhone("");
-    };
+        async function loadTransactions() {
+            if (!selectedSaver) {
+                setRecords([]);
+                return;
+            }
 
-    const handleCreateInvestment = () => {
-        if (!selectedInvestor || !investmentAmount || !investmentEndDate) return;
+            try {
+                setLoadingRecords(true);
+                setError("");
 
-        const investor = data.investors.find((i) => i.id === parseInt(selectedInvestor));
-        const newInvestmentId = Math.max(...data.investments.map((i) => i.id), 0) + 1;
+                const saverId = String(selectedSaver);
+                const service =
+                    customerServices.getSavingsStatement ||
+                    customerServices.getSavingsRecords ||
+                    customerServices.getSaverTransactions;
 
-        const newInvestment = {
-            id: newInvestmentId,
-            investorId: parseInt(selectedInvestor),
-            investorName: investor.name,
-            amount: parseFloat(investmentAmount),
-            returnRate: parseFloat(returnRate),
-            status: "active",
-            startDate: new Date().toISOString().split("T")[0],
-            endDate: investmentEndDate,
+                if (typeof service === "function") {
+                    const response = await service(saverId);
+
+                    const rawRecords = Array.isArray(response)
+                        ? response
+                        : Array.isArray(response?.records)
+                            ? response.records
+                            : Array.isArray(response?.transactions)
+                                ? response.transactions
+                                : [];
+
+                    if (!ignore) {
+                        setRecords(rawRecords.map(mapTransaction));
+                    }
+                    return;
+                }
+
+                const fallbackRecords = Array.isArray(data?.savingsRecords)
+                    ? data.savingsRecords.filter(
+                        (record) => String(record.saverId) === String(selectedSaver)
+                    )
+                    : [];
+
+                if (!ignore) {
+                    setRecords(fallbackRecords);
+                }
+            } catch (err) {
+                if (!ignore) {
+                    setError(
+                        err?.response?.data?.message ||
+                        err?.response?.data?.error ||
+                        "Failed to load statement records."
+                    );
+                    const fallbackRecords = Array.isArray(data?.savingsRecords)
+                        ? data.savingsRecords.filter(
+                            (record) => String(record.saverId) === String(selectedSaver)
+                        )
+                        : [];
+                    setRecords(fallbackRecords);
+                }
+            } finally {
+                if (!ignore) {
+                    setLoadingRecords(false);
+                }
+            }
+        }
+
+        loadTransactions();
+        return () => {
+            ignore = true;
         };
+    }, [selectedSaver, data?.savingsRecords]);
 
-        setData({
-            ...data,
-            investments: [...data.investments, newInvestment],
+    const saver = useMemo(
+        () => savers.find((item) => String(item.id) === String(selectedSaver)),
+        [savers, selectedSaver]
+    );
+
+    const transactions = useMemo(() => {
+        return [...records].sort((a, b) => new Date(a.date) - new Date(b.date));
+    }, [records]);
+
+    const transactionsWithBalance = useMemo(() => {
+        let balance = 0;
+
+        return transactions.map((transaction) => {
+            if (!transaction.cancelled) {
+                if (transaction.type === "deposit") {
+                    balance += Number(transaction.amount || 0);
+                } else if (transaction.type === "withdrawal") {
+                    balance -= Number(transaction.amount || 0);
+                }
+            }
+
+            return {
+                ...transaction,
+                runningBalance: balance,
+            };
         });
+    }, [transactions]);
 
-        setShowNewInvestmentDialog(false);
-        setSelectedInvestor("");
-        setInvestmentAmount("");
-        setReturnRate("15");
-        setInvestmentEndDate("");
-    };
+    const totalDeposits = transactions
+        .filter((transaction) => transaction.type === "deposit" && !transaction.cancelled)
+        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
 
-    const handleRecordReturn = () => {
-        if (!returnAmount) return;
+    const totalWithdrawals = transactions
+        .filter((transaction) => transaction.type === "withdrawal" && !transaction.cancelled)
+        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
 
-        const newReturn = {
-            id: Math.max(...data.investmentReturns.map((r) => r.id), 0) + 1,
-            investmentId: selectedInvestment,
-            amount: parseFloat(returnAmount),
-            date: new Date().toISOString().split("T")[0],
-            cancelled: false,
-        };
-
-        setData({
-            ...data,
-            investmentReturns: [...data.investmentReturns, newReturn],
-        });
-
-        setShowReturnDialog(false);
-        setReturnAmount("");
-    };
-
-    const handleCancelReturn = (returnId) => {
-        const returnIndex = data.investmentReturns.findIndex((r) => r.id === returnId);
-        const returnRecord = data.investmentReturns[returnIndex];
-
-        if (returnRecord.cancelled) return;
-
-        const updatedReturns = [...data.investmentReturns];
-        updatedReturns[returnIndex] = { ...returnRecord, cancelled: true };
-
-        setData({
-            ...data,
-            investmentReturns: updatedReturns,
-        });
-    };
-
-    const activeInvestments = data.investments.filter((i) => i.status === "active");
-
-    const getInvestmentReturns = (investmentId) => {
-        return data.investmentReturns
-            .filter((r) => r.investmentId === investmentId)
-            .sort((a, b) => new Date(b.date) - new Date(a.date));
-    };
-
-    const getTotalReturns = (investmentId) => {
-        return data.investmentReturns
-            .filter((r) => r.investmentId === investmentId && !r.cancelled)
-            .reduce((sum, r) => sum + r.amount, 0);
-    };
-
-    if (selectedInvestment) {
-        const investment = data.investments.find((i) => i.id === selectedInvestment);
-        const returns = getInvestmentReturns(selectedInvestment);
-        const totalReturns = getTotalReturns(selectedInvestment);
-
-        return (
-            <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedInvestment(null)}>
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Investments
-                    </Button>
+    return (
+        <div className="space-y-6">
+            {error ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {error}
                 </div>
+            ) : null}
 
+            <div>
+                <h2 className="text-2xl font-bold text-foreground">Financial Statement</h2>
+                <p className="text-muted-foreground">
+                    View individual saver account statements
+                </p>
+            </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Select Saver</CardTitle>
+                    <CardDescription>
+                        Choose a saver to view their financial statement
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid max-w-sm gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="saver">Saver</Label>
+                            <Select value={selectedSaver} onValueChange={setSelectedSaver}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue
+                                        placeholder={
+                                            loadingSavers ? "Loading savers..." : "Select a saver"
+                                        }
+                                    />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {savers.map((item) => (
+                                        <SelectItem key={item.id} value={String(item.id)}>
+                                            {item.name} - Current Balance:{" "}
+                                            {formatCurrency(item.balance)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {selectedSaver && saver ? (
                 <Card>
                     <CardHeader>
-                        <CardTitle>{investment.investorName} - Investment Details</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5" />
+                            Account Statement - {saver.name}
+                        </CardTitle>
                         <CardDescription>
-                            Principal: {formatCurrency(investment.amount)} | Return Rate:{" "}
-                            {investment.returnRate}% | Total Returns Paid:{" "}
-                            {formatCurrency(totalReturns)} | End Date: {formatDate(investment.endDate)}
+                            Member since: {formatDate(saver.createdAt)} | Phone: {saver.phone}
                         </CardDescription>
                     </CardHeader>
+
                     <CardContent>
-                        <div className="mb-4 flex items-center justify-between">
-                            <h3 className="font-semibold">Investment Returns History</h3>
-                            <Button size="sm" onClick={() => setShowReturnDialog(true)}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Record Return Payment
-                            </Button>
+                        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+                            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                                <p className="text-sm font-medium text-green-600">Total Deposits</p>
+                                <p className="text-2xl font-bold text-green-700">
+                                    {formatCurrency(totalDeposits)}
+                                </p>
+                            </div>
+
+                            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                                <p className="text-sm font-medium text-red-600">Total Withdrawals</p>
+                                <p className="text-2xl font-bold text-red-700">
+                                    {formatCurrency(totalWithdrawals)}
+                                </p>
+                            </div>
+
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                                <p className="text-sm font-medium text-blue-600">Current Balance</p>
+                                <p className="text-2xl font-bold text-blue-700">
+                                    {formatCurrency(saver.balance)}
+                                </p>
+                            </div>
                         </div>
 
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Date</TableHead>
-                                    <TableHead className="text-right">Amount</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead className="text-right">Debit</TableHead>
+                                    <TableHead className="text-right">Credit</TableHead>
+                                    <TableHead className="text-right">Balance</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {returns.length === 0 ? (
+                                {loadingRecords ? (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
-                                            No returns recorded yet
+                                        <TableCell
+                                            colSpan={5}
+                                            className="py-8 text-center text-muted-foreground"
+                                        >
+                                            Loading statement...
+                                        </TableCell>
+                                    </TableRow>
+                                ) : transactionsWithBalance.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell
+                                            colSpan={5}
+                                            className="py-8 text-center text-muted-foreground"
+                                        >
+                                            No transactions found for this saver
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    returns.map((ret) => (
-                                        <TableRow key={ret.id} className={ret.cancelled ? "opacity-60" : ""}>
-                                            <TableCell className={ret.cancelled ? "line-through" : ""}>
-                                                {formatDate(ret.date)}
+                                    transactionsWithBalance.map((transaction) => (
+                                        <TableRow
+                                            key={transaction.id}
+                                            className={transaction.cancelled ? "opacity-60" : ""}
+                                        >
+                                            <TableCell className={transaction.cancelled ? "line-through" : ""}>
+                                                {formatDate(transaction.date)}
                                             </TableCell>
-                                            <TableCell className={`text-right ${ret.cancelled ? "line-through" : ""}`}>
-                                                {formatCurrency(ret.amount)}
+
+                                            <TableCell className={transaction.cancelled ? "line-through" : ""}>
+                                                <span className="flex items-center gap-1">
+                                                    {transaction.type === "deposit" ? (
+                                                        <>
+                                                            <ArrowDownToLine className="h-3 w-3 text-green-600" />
+                                                            Deposit
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <ArrowUpFromLine className="h-3 w-3 text-red-600" />
+                                                            Withdrawal
+                                                        </>
+                                                    )}
+
+                                                    {transaction.cancelled ? (
+                                                        <span className="ml-1 text-xs text-muted-foreground">
+                                                            (Cancelled)
+                                                        </span>
+                                                    ) : null}
+                                                </span>
                                             </TableCell>
-                                            <TableCell className="text-right">
-                                                {!ret.cancelled && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 text-xs text-muted-foreground hover:text-destructive"
-                                                        onClick={() => handleCancelReturn(ret.id)}
-                                                    >
-                                                        <X className="mr-1 h-3 w-3" />
-                                                        Cancel
-                                                    </Button>
-                                                )}
-                                                {ret.cancelled && (
-                                                    <span className="text-xs text-muted-foreground">Cancelled</span>
-                                                )}
+
+                                            <TableCell
+                                                className={`text-right ${
+                                                    transaction.cancelled ? "line-through" : ""
+                                                }`}
+                                            >
+                                                {transaction.type === "withdrawal" && !transaction.cancelled
+                                                    ? formatCurrency(transaction.amount)
+                                                    : "-"}
+                                            </TableCell>
+
+                                            <TableCell
+                                                className={`text-right ${
+                                                    transaction.cancelled ? "line-through" : ""
+                                                }`}
+                                            >
+                                                {transaction.type === "deposit" && !transaction.cancelled
+                                                    ? formatCurrency(transaction.amount)
+                                                    : "-"}
+                                            </TableCell>
+
+                                            <TableCell
+                                                className={`text-right font-medium ${
+                                                    transaction.cancelled ? "line-through" : ""
+                                                }`}
+                                            >
+                                                {formatCurrency(transaction.runningBalance)}
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -222,204 +390,7 @@ export default function Investments({ data, setData }) {
                         </Table>
                     </CardContent>
                 </Card>
-
-                <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Record Investment Return</DialogTitle>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                                <Label>Investment</Label>
-                                <p className="text-sm text-muted-foreground">
-                                    {investment.investorName} - Principal: {formatCurrency(investment.amount)}
-                                </p>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="return-amount">Return Amount</Label>
-                                <Input
-                                    id="return-amount"
-                                    type="number"
-                                    placeholder="Enter return amount"
-                                    value={returnAmount}
-                                    onChange={(e) => setReturnAmount(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setShowReturnDialog(false)}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleRecordReturn}>Record Return</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold text-foreground">Investments</h2>
-                    <p className="text-muted-foreground">
-                        Manage investor investments and returns
-                    </p>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setShowNewInvestorDialog(true)}>
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Register Investor
-                    </Button>
-                    <Button onClick={() => setShowNewInvestmentDialog(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Investment
-                    </Button>
-                </div>
-            </div>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Active Investments</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Investor</TableHead>
-                                <TableHead>Amount</TableHead>
-                                <TableHead>Return Rate</TableHead>
-                                <TableHead>End Date</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {activeInvestments.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                                        No active investments
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                activeInvestments.map((investment) => (
-                                    <TableRow
-                                        key={investment.id}
-                                        className="cursor-pointer hover:bg-muted/50"
-                                        onClick={() => setSelectedInvestment(investment.id)}
-                                    >
-                                        <TableCell className="font-medium">{investment.investorName}</TableCell>
-                                        <TableCell>{formatCurrency(investment.amount)}</TableCell>
-                                        <TableCell>{investment.returnRate}%</TableCell>
-                                        <TableCell className="flex items-center gap-1">
-                                            <Calendar className="h-3 w-3 text-muted-foreground" />
-                                            {formatDate(investment.endDate)}
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            <Dialog open={showNewInvestorDialog} onOpenChange={setShowNewInvestorDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Register New Investor</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="investor-name">Investor Name</Label>
-                            <Input
-                                id="investor-name"
-                                placeholder="Enter investor name"
-                                value={investorName}
-                                onChange={(e) => setInvestorName(e.target.value)}
-                            />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="investor-phone">Phone Number</Label>
-                            <Input
-                                id="investor-phone"
-                                placeholder="Enter phone number"
-                                value={investorPhone}
-                                onChange={(e) => setInvestorPhone(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowNewInvestorDialog(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleRegisterInvestor}>Register Investor</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={showNewInvestmentDialog} onOpenChange={setShowNewInvestmentDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Record New Investment</DialogTitle>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="investor">Investor</Label>
-                            <Select value={selectedInvestor} onValueChange={setSelectedInvestor}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select an investor" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {data.investors
-                                        .filter((i) => i.status === "active")
-                                        .map((investor) => (
-                                            <SelectItem key={investor.id} value={investor.id.toString()}>
-                                                {investor.name}
-                                            </SelectItem>
-                                        ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="investment-amount">Investment Amount</Label>
-                            <Input
-                                id="investment-amount"
-                                type="number"
-                                placeholder="Enter investment amount"
-                                value={investmentAmount}
-                                onChange={(e) => setInvestmentAmount(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="return-rate">Return Rate (%)</Label>
-                            <Input
-                                id="return-rate"
-                                type="number"
-                                placeholder="Enter return rate"
-                                value={returnRate}
-                                onChange={(e) => setReturnRate(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="investment-end-date">Investment End Date</Label>
-                            <Input
-                                id="investment-end-date"
-                                type="date"
-                                value={investmentEndDate}
-                                onChange={(e) => setInvestmentEndDate(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowNewInvestmentDialog(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleCreateInvestment}>Record Investment</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            ) : null}
         </div>
     );
 }

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { FileText, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
 import { Label } from "../ui/label";
 import {
@@ -9,58 +9,80 @@ import {
     SelectTrigger,
     SelectValue,
 } from "../ui/select";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "../ui/table";
-import {formatCurrency,formatDate} from "../../lib/store.js";
+import { formatCurrency, formatDate } from "../../lib/store";
+import { getActiveCustomers } from "../../services/customerServices";
 
-export default function FinancialStatement({ data }) {
-    const [selectedSaver, setSelectedSaver] = useState("");
-
-    const getSaverTransactions = (saverId) => {
-        return data.savingsRecords
-            .filter((r) => r.saverId === parseInt(saverId))
-            .sort((a, b) => new Date(a.date) - new Date(b.date));
+function mapSaver(customer) {
+    return {
+        id: customer.id,
+        name: [customer.firstName, customer.middleName, customer.lastName]
+            .filter(Boolean)
+            .join(" "),
+        phone: customer.phoneNo || customer.phone || "-",
+        balance: Number(customer.balance || 0),
+        status: customer.status || "active",
+        createdAt: customer.createdAt || customer.dateCreated || "",
     };
+}
 
-    const calculateRunningBalance = (transactions) => {
-        let balance = 0;
+export default function FinancialStatement() {
+    const [selectedSaver, setSelectedSaver] = useState("");
+    const [savers, setSavers] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-        return transactions.map((t) => {
-            if (!t.cancelled) {
-                if (t.type === "deposit") {
-                    balance += t.amount;
-                } else {
-                    balance -= t.amount;
+    useEffect(() => {
+        let ignore = false;
+
+        async function loadSavers() {
+            try {
+                setLoading(true);
+                setError("");
+
+                const response = await getActiveCustomers();
+
+                if (!ignore) {
+                    setSavers(Array.isArray(response) ? response.map(mapSaver) : []);
+                }
+            } catch (err) {
+                if (!ignore) {
+                    setError(
+                        err?.response?.data?.message ||
+                        err?.response?.data?.error ||
+                        "Failed to load savers."
+                    );
+                }
+            } finally {
+                if (!ignore) {
+                    setLoading(false);
                 }
             }
-            return { ...t, runningBalance: balance };
-        });
-    };
+        }
 
-    const saver = data.savers.find((s) => s.id === parseInt(selectedSaver));
-    const transactions = selectedSaver ? getSaverTransactions(selectedSaver) : [];
-    const transactionsWithBalance = calculateRunningBalance(transactions);
+        loadSavers();
 
-    const totalDeposits = transactions
-        .filter((t) => t.type === "deposit" && !t.cancelled)
-        .reduce((sum, t) => sum + t.amount, 0);
+        return () => {
+            ignore = true;
+        };
+    }, []);
 
-    const totalWithdrawals = transactions
-        .filter((t) => t.type === "withdrawal" && !t.cancelled)
-        .reduce((sum, t) => sum + t.amount, 0);
+    const saver = useMemo(
+        () => savers.find((item) => String(item.id) === String(selectedSaver)),
+        [savers, selectedSaver]
+    );
 
     return (
         <div className="space-y-6">
+            {error ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {error}
+                </div>
+            ) : null}
+
             <div>
                 <h2 className="text-2xl font-bold text-foreground">Financial Statement</h2>
                 <p className="text-muted-foreground">
-                    View individual saver account statements
+                    View saver account summary from backend data
                 </p>
             </div>
 
@@ -68,7 +90,7 @@ export default function FinancialStatement({ data }) {
                 <CardHeader>
                     <CardTitle>Select Saver</CardTitle>
                     <CardDescription>
-                        Choose a saver to view their financial statement
+                        Choose a saver to view their account summary
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -77,12 +99,14 @@ export default function FinancialStatement({ data }) {
                             <Label htmlFor="saver">Saver</Label>
                             <Select value={selectedSaver} onValueChange={setSelectedSaver}>
                                 <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select a saver" />
+                                    <SelectValue
+                                        placeholder={loading ? "Loading savers..." : "Select a saver"}
+                                    />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {data.savers.map((s) => (
-                                        <SelectItem key={s.id} value={s.id.toString()}>
-                                            {s.name} - Current Balance: {formatCurrency(s.balance)}
+                                    {savers.map((item) => (
+                                        <SelectItem key={item.id} value={String(item.id)}>
+                                            {item.name} - {formatCurrency(item.balance)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -92,118 +116,42 @@ export default function FinancialStatement({ data }) {
                 </CardContent>
             </Card>
 
-            {selectedSaver && saver && (
+            {selectedSaver && saver ? (
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <FileText className="h-5 w-5" />
-                            Account Statement - {saver.name}
+                            Account Summary - {saver.name}
                         </CardTitle>
                         <CardDescription>
                             Member since: {formatDate(saver.createdAt)} | Phone: {saver.phone}
                         </CardDescription>
                     </CardHeader>
+
                     <CardContent>
-                        <div className="mb-6 grid gap-4 sm:grid-cols-3">
-                            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                                <p className="text-sm font-medium text-green-600">Total Deposits</p>
-                                <p className="text-2xl font-bold text-green-700">
-                                    {formatCurrency(totalDeposits)}
-                                </p>
-                            </div>
-                            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                                <p className="text-sm font-medium text-red-600">Total Withdrawals</p>
-                                <p className="text-2xl font-bold text-red-700">
-                                    {formatCurrency(totalWithdrawals)}
-                                </p>
-                            </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
                                 <p className="text-sm font-medium text-blue-600">Current Balance</p>
                                 <p className="text-2xl font-bold text-blue-700">
                                     {formatCurrency(saver.balance)}
                                 </p>
                             </div>
+
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-sm font-medium text-slate-600">Status</p>
+                                <p className="text-2xl font-bold text-slate-700 capitalize">
+                                    {saver.status}
+                                </p>
+                            </div>
                         </div>
 
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead className="text-right">Debit</TableHead>
-                                    <TableHead className="text-right">Credit</TableHead>
-                                    <TableHead className="text-right">Balance</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {transactionsWithBalance.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                                            No transactions found for this saver
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    transactionsWithBalance.map((transaction) => (
-                                        <TableRow
-                                            key={transaction.id}
-                                            className={transaction.cancelled ? "opacity-60" : ""}
-                                        >
-                                            <TableCell className={transaction.cancelled ? "line-through" : ""}>
-                                                {formatDate(transaction.date)}
-                                            </TableCell>
-
-                                            <TableCell className={transaction.cancelled ? "line-through" : ""}>
-                        <span className="flex items-center gap-1">
-                          {transaction.type === "deposit" ? (
-                              <>
-                                  <ArrowDownToLine className="h-3 w-3 text-green-600" />
-                                  Deposit
-                              </>
-                          ) : (
-                              <>
-                                  <ArrowUpFromLine className="h-3 w-3 text-red-600" />
-                                  Withdrawal
-                              </>
-                          )}
-                            {transaction.cancelled && (
-                                <span className="ml-1 text-xs text-muted-foreground">
-                              (Cancelled)
-                            </span>
-                            )}
-                        </span>
-                                            </TableCell>
-
-                                            <TableCell
-                                                className={`text-right ${transaction.cancelled ? "line-through" : ""}`}
-                                            >
-                                                {transaction.type === "withdrawal" && !transaction.cancelled
-                                                    ? formatCurrency(transaction.amount)
-                                                    : "-"}
-                                            </TableCell>
-
-                                            <TableCell
-                                                className={`text-right ${transaction.cancelled ? "line-through" : ""}`}
-                                            >
-                                                {transaction.type === "deposit" && !transaction.cancelled
-                                                    ? formatCurrency(transaction.amount)
-                                                    : "-"}
-                                            </TableCell>
-
-                                            <TableCell
-                                                className={`text-right font-medium ${
-                                                    transaction.cancelled ? "line-through" : ""
-                                                }`}
-                                            >
-                                                {formatCurrency(transaction.runningBalance)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
+                        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                            Transaction statement is not shown here yet because there is no backend
+                            savings-records endpoint connected in the provided services.
+                        </div>
                     </CardContent>
                 </Card>
-            )}
+            ) : null}
         </div>
     );
 }

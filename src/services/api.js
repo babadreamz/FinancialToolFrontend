@@ -11,7 +11,6 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-
         return config;
     },
     (error) => Promise.reject(error)
@@ -21,14 +20,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        // If token is invalid or expired
-        if (error.response && error.response.status === 401) {
-            console.warn("Session expired. Logging out...");
-
+        if (error.response?.status === 401) {
             localStorage.removeItem("saye_auth");
             localStorage.removeItem("saye_token");
             localStorage.removeItem("saye_user");
-
             window.location.href = "/";
         }
 

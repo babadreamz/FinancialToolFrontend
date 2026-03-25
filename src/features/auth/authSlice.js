@@ -9,14 +9,48 @@ let parsedUser;
 
 try {
     parsedUser = savedUser ? JSON.parse(savedUser) : null;
+    // eslint-disable-next-line no-unused-vars
 } catch (error) {
-    parsedUser = savedUser || null;
+    parsedUser = null;
 }
 
+const parseJwt = (token) => {
+    try {
+        const base64Url = token.split(".")[1];
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split("")
+                .map(
+                    (char) =>
+                        `%${(`00${char.charCodeAt(0).toString(16)}`).slice(-2)}`
+                )
+                .join("")
+        );
+        return JSON.parse(jsonPayload);
+        // eslint-disable-next-line no-unused-vars
+    } catch (error) {
+        return null;
+    }
+};
+
+const isTokenExpired = (token) => {
+    if (!token) return true;
+
+    const decoded = parseJwt(token);
+
+    if (!decoded?.exp) return true;
+
+    const currentTime = Math.floor(Date.now() / 1000);
+    return decoded.exp <= currentTime;
+};
+
+const tokenIsValid = savedToken && !isTokenExpired(savedToken);
+
 const initialState = {
-    user: parsedUser,
-    token: savedToken || null,
-    isAuthenticated: savedAuth === "true" && !!savedToken,
+    user: tokenIsValid ? parsedUser : null,
+    token: tokenIsValid ? savedToken : null,
+    isAuthenticated: savedAuth === "true" && !!tokenIsValid,
     isLoading: false,
     error: null,
 };
@@ -37,16 +71,14 @@ export const login = createAsyncThunk(
     }
 );
 
-export const logoutAsync = createAsyncThunk(
-    "auth/logout",
-    async (_) => {
-        try {
-            await logoutAdmin();
-        } catch (error) {
-            console.warn("Logout API failed");
-        }
+export const logoutAsync = createAsyncThunk("auth/logout", async () => {
+    try {
+        await logoutAdmin();
+        // eslint-disable-next-line no-unused-vars
+    } catch (error) {
+        console.warn("Logout API failed");
     }
-);
+});
 
 const clearSession = (state) => {
     state.user = null;
@@ -81,18 +113,23 @@ const authSlice = createSlice({
 
                 const payload = action.payload;
 
-                const token =
-                    payload.token ||
-                    payload.jwt ||
-                    payload.data?.token ||
-                    "";
-
-                state.token = token;
-                state.user = payload;
+                state.token = payload.token;
+                state.user = {
+                    id: payload.id,
+                    username: payload.username,
+                    roles: payload.roles || [],
+                };
 
                 localStorage.setItem("saye_auth", "true");
-                localStorage.setItem("saye_token", token);
-                localStorage.setItem("saye_user", JSON.stringify(payload));
+                localStorage.setItem("saye_token", payload.token);
+                localStorage.setItem(
+                    "saye_user",
+                    JSON.stringify({
+                        id: payload.id,
+                        username: payload.username,
+                        roles: payload.roles || [],
+                    })
+                );
             })
             .addCase(login.rejected, (state, action) => {
                 state.isLoading = false;
@@ -105,4 +142,5 @@ const authSlice = createSlice({
 });
 
 export const { logout, clearError } = authSlice.actions;
+export { parseJwt, isTokenExpired };
 export default authSlice.reducer;
