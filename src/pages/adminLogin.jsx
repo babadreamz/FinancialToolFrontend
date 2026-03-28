@@ -53,7 +53,7 @@ export default function AdminLogin() {
                         <Landmark className="h-6 w-6" />
                     </div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-                        SAYE Financial Tool
+                        SAYE DIGIBOOK
                     </h1>
                     <p className="mt-2 text-sm text-slate-500">Sign in to continue</p>
                 </div>

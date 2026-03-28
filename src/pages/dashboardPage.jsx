@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
     LayoutDashboard,
     PiggyBank,
@@ -10,7 +10,7 @@ import {
     X,
 } from "lucide-react";
 import { useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { logoutAsync } from "../features/auth/authSlice";
 
 import Dashboard from "../components/dashboard/dashboard";
@@ -18,26 +18,8 @@ import Savings from "../components/dashboard/savings";
 import Loans from "../components/dashboard/loans";
 import Investments from "../components/dashboard/investments";
 import FinancialStatement from "../components/dashboard/financialStatement";
-import { getActiveCustomers } from "../services/customerServices";
 
-function mapSaver(customer) {
-    return {
-        id: customer.id,
-        name: [customer.firstName, customer.middleName, customer.lastName]
-            .filter(Boolean)
-            .join(" "),
-        firstName: customer.firstName || "",
-        middleName: customer.middleName || "",
-        lastName: customer.lastName || "",
-        email: customer.email || "",
-        phone: customer.phoneNo || "",
-        whatsappNo: customer.whatsappNo || "",
-        accountId: customer.accountId || "",
-        balance: Number(customer.balance || 0),
-        status: customer.status || "active",
-        createdAt: customer.createdAt || customer.dateCreated || "",
-    };
-}
+const VALID_TABS = ["dashboard", "savings", "loans", "investments", "statement"];
 
 export default function DashboardPage() {
     const [data, setData] = useState({
@@ -50,37 +32,16 @@ export default function DashboardPage() {
         investmentReturns: [],
     });
 
-    const [activeTab, setActiveTab] = useState("dashboard");
+    const [searchParams, setSearchParams] = useSearchParams();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Tab is stored in the URL: ?tab=savings
+    // On reload the URL is preserved so the correct tab is restored automatically.
+    const rawTab = searchParams.get("tab");
+    const activeTab = VALID_TABS.includes(rawTab) ? rawTab : "dashboard";
 
     const dispatch = useDispatch();
     const navigate = useNavigate();
-
-    useEffect(() => {
-        let ignore = false;
-
-        async function loadSavers() {
-            try {
-                const response = await getActiveCustomers();
-                const savers = Array.isArray(response) ? response.map(mapSaver) : [];
-
-                if (!ignore) {
-                    setData((prev) => ({
-                        ...prev,
-                        savers,
-                    }));
-                }
-            } catch (error) {
-                console.error("Failed to load active savers:", error);
-            }
-        }
-
-        loadSavers();
-
-        return () => {
-            ignore = true;
-        };
-    }, []);
 
     const handleLogout = async () => {
         await dispatch(logoutAsync());
@@ -88,36 +49,16 @@ export default function DashboardPage() {
     };
 
     const handleMenuClick = (key) => {
-        setActiveTab(key);
+        setSearchParams({ tab: key }, { replace: true });
         setSidebarOpen(false);
     };
 
     const menuItems = [
-        {
-            key: "dashboard",
-            label: "Dashboard",
-            icon: <LayoutDashboard className="h-5 w-5" />,
-        },
-        {
-            key: "savings",
-            label: "Savings",
-            icon: <PiggyBank className="h-5 w-5" />,
-        },
-        {
-            key: "loans",
-            label: "Loans",
-            icon: <HandCoins className="h-5 w-5" />,
-        },
-        {
-            key: "investments",
-            label: "Investments",
-            icon: <TrendingUp className="h-5 w-5" />,
-        },
-        {
-            key: "statement",
-            label: "Statement",
-            icon: <FileText className="h-5 w-5" />,
-        },
+        { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-5 w-5" /> },
+        { key: "savings",   label: "Savings",   icon: <PiggyBank className="h-5 w-5" /> },
+        { key: "loans",     label: "Loans",     icon: <HandCoins className="h-5 w-5" /> },
+        { key: "investments", label: "Investments", icon: <TrendingUp className="h-5 w-5" /> },
+        { key: "statement", label: "Statement", icon: <FileText className="h-5 w-5" /> },
     ];
 
     return (
@@ -137,10 +78,9 @@ export default function DashboardPage() {
                 >
                     <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
                         <div>
-                            <h1 className="text-xl font-bold text-slate-900">SAYE Financial Tool</h1>
-                            <p className="text-sm text-slate-500">Financial management system</p>
+                            <h1 className="text-xl font-bold text-slate-900">SAYE Digibook</h1>
+                            <p className="text-sm text-slate-500">Financial management tool</p>
                         </div>
-
                         <button
                             onClick={() => setSidebarOpen(false)}
                             className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
@@ -184,14 +124,9 @@ export default function DashboardPage() {
                     <header className="border-b border-slate-200 bg-white">
                         <div className="flex items-center justify-between px-4 py-4 md:px-6">
                             <div>
-                                <h1 className="text-lg font-bold text-slate-900 md:hidden">
-                                    SAYE Financial Tool
-                                </h1>
-                                <p className="text-sm text-slate-500 md:hidden">
-                                    Financial management system
-                                </p>
+                                <h1 className="text-lg font-bold text-slate-900 md:hidden">SAYE Digibook</h1>
+                                <p className="text-sm text-slate-500 md:hidden">Financial management tool</p>
                             </div>
-
                             <button
                                 onClick={() => setSidebarOpen(true)}
                                 className="rounded-xl border border-slate-200 p-2 text-slate-700 hover:bg-slate-100 md:hidden"
@@ -203,36 +138,11 @@ export default function DashboardPage() {
                     </header>
 
                     <main className="min-w-0 flex-1 px-4 py-6 md:px-6">
-                        {activeTab === "dashboard" && (
-                            <Dashboard
-                                data={data}
-                                setData={setData}
-                            />
-                        )}
-
-                        {activeTab === "savings" && (
-                            <Savings
-                                data={data}
-                                setData={setData}
-                                initialAction={null}
-                            />
-                        )}
-
-                        {activeTab === "loans" && (
-                            <Loans
-                                data={data}
-                                setData={setData}
-                                initialAction={null}
-                            />
-                        )}
-
-                        {activeTab === "investments" && (
-                            <Investments data={data} setData={setData} />
-                        )}
-
-                        {activeTab === "statement" && (
-                            <FinancialStatement data={data} />
-                        )}
+                        {activeTab === "dashboard" && <Dashboard data={data} setData={setData} />}
+                        {activeTab === "savings" && <Savings data={data} setData={setData} initialAction={null} />}
+                        {activeTab === "loans" && <Loans data={data} setData={setData} initialAction={null} />}
+                        {activeTab === "investments" && <Investments data={data} setData={setData} />}
+                        {activeTab === "statement" && <FinancialStatement data={data} />}
                     </main>
                 </div>
             </div>
