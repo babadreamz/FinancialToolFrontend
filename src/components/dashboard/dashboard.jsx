@@ -80,20 +80,22 @@ function mapSaver(customer) {
     };
 }
 
-/**
- * Safely extract the items array from either a plain array
- * or a Spring Page object ({ content: [...], totalPages, ... }).
- */
+function mapInvestmentForDashboard(inv) {
+    return {
+        id:             inv.id || "",
+        investorName:   inv.investor?.fullName || inv.investorName || "—",
+        amountInvested: Number(inv.amountInvested || 0),
+        remainingReturn: Number(inv.remainingReturn || 0),
+        status:         inv.investmentStatus || inv.status || "ACTIVE",
+    };
+}
+
 function extractContent(response) {
     if (Array.isArray(response)) return response;
     if (response && Array.isArray(response.content)) return response.content;
     return [];
 }
 
-/**
- * Fetch ALL pages of a paginated endpoint by looping until last page.
- * Use only when the full list is needed (e.g. loan repayment dropdown).
- */
 async function fetchAllPages(fetchFn, pageSize = 50) {
     let page = 0;
     let allItems = [];
@@ -203,21 +205,41 @@ export default function Dashboard({ data, setData }) {
     const savers = data?.savers || [];
     const today = useMemo(() => getTodayDate(), []);
 
-    // ── refresh savers: fetches ALL pages so search/dropdown always has full list
+    // ── refresh savers ────────────────────────────────────────────────────────
     const refreshSavers = useCallback(async () => {
         try {
             const allSavers = await fetchAllPages(getActiveCustomers, 50);
             const mapped = allSavers.map(mapSaver);
-
-            setData((prev) => ({
-                ...prev,
-                savers: mapped,
-            }));
-
+            setData((prev) => ({ ...prev, savers: mapped }));
             return mapped;
         } catch (error) {
             console.error("Failed to refresh savers:", error);
             throw error;
+        }
+    }, [setData]);
+
+    // ── refresh investments — fetches ALL pages, maps, updates state + shared data
+    const refreshInvestments = useCallback(async () => {
+        try {
+            const all = await fetchAllPages(getActiveInvestments, 50);
+            const mapped = all.map(mapInvestmentForDashboard);
+            setInvestments(mapped);
+            setData((prev) => ({ ...prev, investments: mapped }));
+            return mapped;
+        } catch (error) {
+            console.error("Failed to refresh investments:", error);
+        }
+    }, [setData]);
+
+    // ── refresh loans ─────────────────────────────────────────────────────────
+    const refreshLoans = useCallback(async () => {
+        try {
+            const allLoans = await fetchAllPages(getActiveLoans, 50);
+            setLoans(allLoans);
+            setData((prev) => ({ ...prev, loans: allLoans }));
+            return allLoans;
+        } catch (error) {
+            console.error("Failed to refresh loans:", error);
         }
     }, [setData]);
 
@@ -227,74 +249,32 @@ export default function Dashboard({ data, setData }) {
         async function loadDashboardData() {
             try {
                 setLoading(true);
-
-                // Fetch first page of loans and investments for summary cards.
-                // For the loan repayment dropdown we do a full fetch later on demand.
-                const [loansRes, investmentsRes] = await Promise.all([
-                    getActiveLoans(0, 10),
-                    getActiveInvestments(0, 10),
+                await Promise.all([
+                    refreshSavers(),
+                    refreshInvestments(),
+                    refreshLoans(),
                 ]);
-
-                if (!ignore) {
-                    setLoans(extractContent(loansRes));
-                    setInvestments(extractContent(investmentsRes));
-                }
             } catch (error) {
-                console.error("Loans/investments fetch error:", error);
-            }
-
-            try {
-                if (!ignore) {
-                    await refreshSavers();
-                }
-            } catch (error) {
-                console.error("Savers fetch error:", error);
+                console.error("Dashboard load error:", error);
             } finally {
-                if (!ignore) {
-                    setLoading(false);
-                }
+                if (!ignore) setLoading(false);
             }
         }
 
         void loadDashboardData();
-
-        return () => {
-            ignore = true;
-        };
-    }, [refreshSavers]);
-
-    // When the loan repayment panel opens, fetch ALL loans so the dropdown is complete
-    useEffect(() => {
-        if (activePanel !== QUICK_ACTIONS.RECORD_LOAN_REPAYMENT) return;
-
-        async function loadAllLoans() {
-            try {
-                const allLoans = await fetchAllPages(getActiveLoans, 50);
-                setLoans(allLoans);
-                setData((prev) => ({ ...prev, loans: allLoans }));
-            } catch (err) {
-                console.error("Failed to load all loans for repayment:", err);
-            }
-        }
-
-        void loadAllLoans();
-    }, [activePanel, setData]);
+        return () => { ignore = true; };
+    }, [refreshSavers, refreshInvestments, refreshLoans]);
 
     const filteredSavers = useMemo(() => {
         const query = saverSearch.trim().toLowerCase();
-
         const activeOnly = savers.filter((saver) => {
             const status = String(saver.status || "").toLowerCase();
             return status === "active" || status === "approved";
         });
-
         if (!query) return activeOnly;
-
         return activeOnly.filter((saver) => {
             const haystack = [saver.name, saver.accountId, saver.phone]
-                .filter(Boolean)
-                .join(" ")
-                .toLowerCase();
+                .filter(Boolean).join(" ").toLowerCase();
             return haystack.includes(query);
         });
     }, [savers, saverSearch]);
@@ -302,7 +282,6 @@ export default function Dashboard({ data, setData }) {
     const combinedLoans = useMemo(() => {
         const sourceLoans = [...loans, ...(data?.loans || [])];
         const seen = new Set();
-
         return sourceLoans.filter((loan) => {
             const key = String(loan.id || loan.loanId || "");
             if (!key) return true;
@@ -312,55 +291,52 @@ export default function Dashboard({ data, setData }) {
         });
     }, [loans, data?.loans]);
 
-    const activeSaversCount = useMemo(() => {
-        return savers.filter((saver) => {
-            const status = String(saver.status || "").toLowerCase();
-            return status === "active" || status === "approved";
-        }).length;
-    }, [savers]);
+    const activeSaversCount = useMemo(() =>
+            savers.filter((s) => {
+                const st = String(s.status || "").toLowerCase();
+                return st === "active" || st === "approved";
+            }).length,
+        [savers]);
 
-    const totalSavings = useMemo(() => {
-        return savers.reduce((sum, saver) => sum + Number(saver.balance || 0), 0);
-    }, [savers]);
+    const totalSavings = useMemo(() =>
+            savers.reduce((sum, s) => sum + Number(s.balance || 0), 0),
+        [savers]);
 
-    const totalLoans = useMemo(() => {
-        return combinedLoans.reduce(
-            (sum, loan) =>
-                sum + Number(loan.remainingBalance ?? loan.balance ?? loan.amount ?? 0),
-            0,
-        );
-    }, [combinedLoans]);
+    const totalLoans = useMemo(() =>
+            combinedLoans.reduce(
+                (sum, loan) => sum + Number(loan.remainingBalance ?? loan.balance ?? loan.amount ?? 0),
+                0,
+            ),
+        [combinedLoans]);
 
-    const totalInvestments = useMemo(() => {
-        return investments.reduce(
-            (sum, inv) => sum + Number(inv.amountInvested || 0),
-            0,
-        );
-    }, [investments]);
+    // Uses live investments state — always up to date after every refresh
+    const activeInvestmentsCount = useMemo(() =>
+            investments.filter((inv) =>
+                String(inv.status || "").toUpperCase() === "ACTIVE"
+            ).length,
+        [investments]);
+
+    const totalInvestments = useMemo(() =>
+            investments
+                .filter((inv) => String(inv.status || "").toUpperCase() === "ACTIVE")
+                .reduce((sum, inv) => sum + Number(inv.amountInvested || 0), 0),
+        [investments]);
 
     // ── form resets ────────────────────────────────────────────────────────────
 
-    const resetMessages = () => {
-        setFormError("");
-        setSuccessMessage("");
-    };
+    const resetMessages = () => { setFormError(""); setSuccessMessage(""); };
 
     const resetSavingsForm = () => {
-        setSaverSearch("");
-        setSelectedSaver(null);
-        setAmount("");
+        setSaverSearch(""); setSelectedSaver(null); setAmount("");
         setPaymentMethod(PAYMENT_METHODS?.[0]?.value || "CASH");
     };
 
     const resetLoanForms = () => {
         setLoanDisbursementForm(INITIAL_LOAN_DISBURSEMENT_FORM);
-        setSelectedLoanId("");
-        setAmount("");
+        setSelectedLoanId(""); setAmount("");
         setPaymentMethod(PAYMENT_METHODS?.[0]?.value || "CASH");
-        setLoanFlowStep("disbursement");
-        setCreatedLoanId("");
-        setCollateralAddedCount(0);
-        setGuarantorAddedCount(0);
+        setLoanFlowStep("disbursement"); setCreatedLoanId("");
+        setCollateralAddedCount(0); setGuarantorAddedCount(0);
         setCollateralForm({ name: "", description: "", location: "", approximateValue: "" });
         setGuarantorForm({ firstName: "", middleName: "", lastName: "", phoneNo: "", address: "", occupation: "", placeOfWork: "" });
     };
@@ -374,19 +350,13 @@ export default function Dashboard({ data, setData }) {
     };
 
     const resetRegisterFlow = () => {
-        setRegisterStep("saver");
-        setRegisteredCustomerId("");
-        resetSaverRegistrationForm();
-        resetNextOfKinForm();
+        setRegisterStep("saver"); setRegisteredCustomerId("");
+        resetSaverRegistrationForm(); resetNextOfKinForm();
     };
 
     const closePanel = () => {
-        setActivePanel(null);
-        setIsSaving(false);
-        setFormError("");
-        resetSavingsForm();
-        resetLoanForms();
-        resetRegisterFlow();
+        setActivePanel(null); setIsSaving(false); setFormError("");
+        resetSavingsForm(); resetLoanForms(); resetRegisterFlow();
     };
 
     const openPanel = (panel) => {
@@ -438,35 +408,20 @@ export default function Dashboard({ data, setData }) {
 
     const handleRegisterSaver = async () => {
         resetMessages();
-
         if (!saverForm.firstName.trim() || !saverForm.lastName.trim() || !saverForm.address.trim()) {
-            setFormError("First name, last name and address are required.");
-            return;
+            setFormError("First name, last name and address are required."); return;
         }
-
         try {
             setIsSaving(true);
             const response = await registerSaver(saverForm);
             const customerId = response?.id;
-
             setRegisteredCustomerId(customerId || "");
-            setNextOfKinForm({
-                firstName: "", middleName: "", lastName: "",
-                customerId: customerId || "",
-                phoneNo: "", address: "", relationship: "",
-            });
-
+            setNextOfKinForm({ firstName: "", middleName: "", lastName: "", customerId: customerId || "", phoneNo: "", address: "", relationship: "" });
             setSuccessMessage("Saver registered successfully. Please add next of kin.");
             setRegisterStep("next_of_kin");
-
             try { await refreshSavers(); } catch (e) { console.error(e); }
         } catch (error) {
-            setFormError(
-                error?.response?.data?.message ||
-                error?.response?.data?.error ||
-                error?.message ||
-                "Failed to register saver.",
-            );
+            setFormError(error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to register saver.");
         } finally {
             setIsSaving(false);
         }
@@ -474,39 +429,21 @@ export default function Dashboard({ data, setData }) {
 
     const handleAddNextOfKin = async () => {
         resetMessages();
-
-        if (
-            !nextOfKinForm.firstName.trim() ||
-            !nextOfKinForm.lastName.trim() ||
-            !nextOfKinForm.phoneNo.trim() ||
-            !nextOfKinForm.address.trim() ||
-            !nextOfKinForm.relationship.trim()
-        ) {
-            setFormError("All next of kin required fields must be filled.");
-            return;
+        if (!nextOfKinForm.firstName.trim() || !nextOfKinForm.lastName.trim() ||
+            !nextOfKinForm.phoneNo.trim() || !nextOfKinForm.address.trim() || !nextOfKinForm.relationship.trim()) {
+            setFormError("All next of kin required fields must be filled."); return;
         }
-
         if (!nextOfKinForm.customerId && !registeredCustomerId) {
-            setFormError("Customer ID is missing. Please register saver again.");
-            return;
+            setFormError("Customer ID is missing. Please register saver again."); return;
         }
-
         try {
             setIsSaving(true);
-            await addNextOfKin({
-                ...nextOfKinForm,
-                customerId: nextOfKinForm.customerId || registeredCustomerId,
-            });
+            await addNextOfKin({ ...nextOfKinForm, customerId: nextOfKinForm.customerId || registeredCustomerId });
             try { await refreshSavers(); } catch (e) { console.error(e); }
             closePanel();
             setSuccessMessage("Saver registered and next of kin added successfully.");
         } catch (error) {
-            setFormError(
-                error?.response?.data?.message ||
-                error?.response?.data?.error ||
-                error?.message ||
-                "Failed to add next of kin.",
-            );
+            setFormError(error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to add next of kin.");
         } finally {
             setIsSaving(false);
         }
@@ -514,14 +451,11 @@ export default function Dashboard({ data, setData }) {
 
     const handleRecordDeposit = async () => {
         resetMessages();
-
         if (!selectedSaver || !amount) { setFormError("Please select a saver and enter amount."); return; }
         const depositAmount = Number(amount);
         if (Number.isNaN(depositAmount) || depositAmount <= 0) { setFormError("Enter a valid deposit amount."); return; }
-
         const recorderId = getLoggedInAdminId();
         if (!recorderId) { setFormError("Could not find logged in admin."); return; }
-
         try {
             setIsSaving(true);
             await recordDeposit({ saverId: String(selectedSaver.id), amount: depositAmount, paymentMethod, recorderId: String(recorderId) });
@@ -537,15 +471,12 @@ export default function Dashboard({ data, setData }) {
 
     const handleRecordWithdrawal = async () => {
         resetMessages();
-
         if (!selectedSaver || !amount) { setFormError("Please select a saver and enter amount."); return; }
         const withdrawalAmount = Number(amount);
         if (Number.isNaN(withdrawalAmount) || withdrawalAmount <= 0) { setFormError("Enter a valid withdrawal amount."); return; }
         if (withdrawalAmount > Number(selectedSaver.balance || 0)) { setFormError("Withdrawal amount cannot exceed the saver's current balance."); return; }
-
         const recorderId = getLoggedInAdminId();
         if (!recorderId) { setFormError("Could not find logged in admin."); return; }
-
         try {
             setIsSaving(true);
             await recordWithdrawal({ saverId: String(selectedSaver.id), amount: withdrawalAmount, paymentMethod, recorderId: String(recorderId) });
@@ -561,66 +492,39 @@ export default function Dashboard({ data, setData }) {
 
     const handleRecordLoanDisbursement = async () => {
         resetMessages();
-
         const { borrowerName, borrowerPhoneNumber, borrowerEmail, principal, interestRate, startDate, durationDays, repaymentFrequency } = loanDisbursementForm;
-
         if (!borrowerName.trim() || !borrowerPhoneNumber.trim() || !principal || !interestRate || !startDate || !durationDays || !repaymentFrequency) {
-            setFormError("All required fields must be filled.");
-            return;
+            setFormError("All required fields must be filled."); return;
         }
-
         const parsedPrincipal = Number(principal);
         const parsedInterestRate = Number(interestRate);
         const parsedDurationDays = Number(durationDays);
-
         if (Number.isNaN(parsedPrincipal) || parsedPrincipal <= 0) { setFormError("Enter a valid principal amount."); return; }
         if (Number.isNaN(parsedInterestRate) || parsedInterestRate < 0) { setFormError("Enter a valid interest rate."); return; }
         if (Number.isNaN(parsedDurationDays) || parsedDurationDays <= 0) { setFormError("Enter a valid duration in days."); return; }
         if (startDate < today) { setFormError("Start date cannot be in the past."); return; }
-
         const approverId = getLoggedInAdminId();
         if (!approverId) { setFormError("Could not find logged in admin."); return; }
-
         try {
             setIsSaving(true);
-
             const payload = {
-                borrowerName: borrowerName.trim(),
-                borrowerPhoneNumber: borrowerPhoneNumber.trim(),
-                borrowerEmail: borrowerEmail.trim(),
-                principal: parsedPrincipal,
-                interestRate: parsedInterestRate,
-                startDate,
-                durationDays: parsedDurationDays,
-                repaymentFrequency,
+                borrowerName: borrowerName.trim(), borrowerPhoneNumber: borrowerPhoneNumber.trim(),
+                borrowerEmail: borrowerEmail.trim(), principal: parsedPrincipal,
+                interestRate: parsedInterestRate, startDate,
+                durationDays: parsedDurationDays, repaymentFrequency,
                 approverId: String(approverId),
             };
-
             const response = await recordLoanDisbursement(payload);
             const loanId = response?.loanId || response?.id;
-
-            if (!loanId) {
-                setFormError("Loan was recorded but loanId was not returned by backend.");
-                return;
-            }
-
+            if (!loanId) { setFormError("Loan was recorded but loanId was not returned by backend."); return; }
             setCreatedLoanId(loanId);
-            setCollateralAddedCount(0);
-            setGuarantorAddedCount(0);
-
-            // Prepend new loan to local state
+            setCollateralAddedCount(0); setGuarantorAddedCount(0);
             setLoans((prev) => [response, ...prev]);
             setData((prev) => ({ ...prev, loans: [response, ...(prev.loans || [])] }));
-
             setSuccessMessage("Loan disbursement recorded successfully. Add collateral or go next.");
             setLoanFlowStep("collateral");
         } catch (error) {
-            setFormError(
-                error?.response?.data?.message ||
-                error?.response?.data?.error ||
-                error?.message ||
-                "Failed to record loan disbursement.",
-            );
+            setFormError(error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to record loan disbursement.");
         } finally {
             setIsSaving(false);
         }
@@ -628,23 +532,14 @@ export default function Dashboard({ data, setData }) {
 
     const handleAddCollateral = async () => {
         resetMessages();
-
         if (!createdLoanId) { setFormError("Loan ID is missing. Please record the loan again."); return; }
         const { name, description, location, approximateValue } = collateralForm;
         if (!name.trim() || !description.trim() || !location.trim() || !approximateValue) { setFormError("All collateral fields are required."); return; }
-
         const parsedApproximateValue = Number(approximateValue);
         if (Number.isNaN(parsedApproximateValue) || parsedApproximateValue <= 0) { setFormError("Enter a valid collateral value."); return; }
-
         try {
             setIsSaving(true);
-            await addCollateral(createdLoanId, {
-                loanId: createdLoanId,
-                name: name.trim(),
-                description: description.trim(),
-                location: location.trim(),
-                approximateValue: parsedApproximateValue,
-            });
+            await addCollateral(createdLoanId, { loanId: createdLoanId, name: name.trim(), description: description.trim(), location: location.trim(), approximateValue: parsedApproximateValue });
             setCollateralAddedCount((prev) => prev + 1);
             setCollateralForm({ name: "", description: "", location: "", approximateValue: "" });
             setSuccessMessage("Collateral added successfully. Add another one or go next.");
@@ -657,26 +552,14 @@ export default function Dashboard({ data, setData }) {
 
     const handleAddGuarantor = async () => {
         resetMessages();
-
         if (!createdLoanId) { setFormError("Loan ID is missing. Please record the loan again."); return; }
         const { firstName, middleName, lastName, phoneNo, address, occupation, placeOfWork } = guarantorForm;
         if (!firstName.trim() || !lastName.trim() || !phoneNo.trim() || !address.trim() || !occupation.trim() || !placeOfWork.trim()) {
-            setFormError("All fields except middle name are required.");
-            return;
+            setFormError("All fields except middle name are required."); return;
         }
-
         try {
             setIsSaving(true);
-            await addGuarantor(createdLoanId, {
-                firstName: firstName.trim(),
-                middleName: middleName.trim() || "",
-                lastName: lastName.trim(),
-                loanId: createdLoanId,
-                phoneNo: phoneNo.trim(),
-                address: address.trim(),
-                occupation: occupation.trim(),
-                placeOfWork: placeOfWork.trim(),
-            });
+            await addGuarantor(createdLoanId, { firstName: firstName.trim(), middleName: middleName.trim() || "", lastName: lastName.trim(), loanId: createdLoanId, phoneNo: phoneNo.trim(), address: address.trim(), occupation: occupation.trim(), placeOfWork: placeOfWork.trim() });
             setGuarantorAddedCount((prev) => prev + 1);
             setGuarantorForm({ firstName: "", middleName: "", lastName: "", phoneNo: "", address: "", occupation: "", placeOfWork: "" });
             setSuccessMessage("Guarantor added successfully. Add another one or proceed.");
@@ -701,23 +584,15 @@ export default function Dashboard({ data, setData }) {
 
     const handleRecordLoanRepayment = async () => {
         resetMessages();
-
         if (!selectedLoanId || !amount) { setFormError("Select a loan and enter amount."); return; }
         const parsedAmount = Number(amount);
         if (Number.isNaN(parsedAmount) || parsedAmount <= 0) { setFormError("Enter a valid repayment amount."); return; }
-
         const recorderId = getLoggedInAdminId();
         if (!recorderId) { setFormError("Could not find logged in admin."); return; }
-
         try {
             setIsSaving(true);
             await recordRepayment({ loanId: selectedLoanId, amountPaid: parsedAmount, paymentMethod, recorderId: String(recorderId) });
-
-            // Refresh all loans after repayment
-            const allLoans = await fetchAllPages(getActiveLoans, 50);
-            setLoans(allLoans);
-            setData((prev) => ({ ...prev, loans: allLoans }));
-
+            await refreshLoans();
             await refreshSavers();
             closePanel();
             setSuccessMessage("Loan repayment recorded successfully.");
@@ -782,7 +657,7 @@ export default function Dashboard({ data, setData }) {
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{investments.length}</div>
+                        <div className="text-2xl font-bold">{activeInvestmentsCount}</div>
                         <p className="text-xs text-muted-foreground">Total invested: {formatCurrency(totalInvestments)}</p>
                     </CardContent>
                 </Card>
@@ -801,13 +676,8 @@ export default function Dashboard({ data, setData }) {
                             { action: QUICK_ACTIONS.RECORD_LOAN_DISBURSEMENT, icon: <HandCoins className="h-5 w-5" />, label: "Record Loan Disbursement" },
                             { action: QUICK_ACTIONS.RECORD_LOAN_REPAYMENT, icon: <Receipt className="h-5 w-5" />, label: "Record Loan Repayment" },
                         ].map(({ action, icon, label }) => (
-                            <Button
-                                key={action}
-                                variant="outline"
-                                className="h-auto flex-col gap-2 py-4"
-                                onClick={() => openPanel(action)}
-                                type="button"
-                            >
+                            <Button key={action} variant="outline" className="h-auto flex-col gap-2 py-4"
+                                    onClick={() => openPanel(action)} type="button">
                                 {icon}
                                 {label}
                             </Button>
@@ -820,7 +690,6 @@ export default function Dashboard({ data, setData }) {
             {activePanel ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
                     <div className="absolute inset-0" onClick={closePanel} />
-
                     <div className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
                         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
                             <h3 className="text-lg font-semibold text-slate-900">
@@ -853,7 +722,6 @@ export default function Dashboard({ data, setData }) {
                                             </div>
                                         ))}
                                     </div>
-
                                     {registerStep === "saver" && (
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {[
@@ -881,7 +749,6 @@ export default function Dashboard({ data, setData }) {
                                             </div>
                                         </div>
                                     )}
-
                                     {registerStep === "next_of_kin" && (
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {[
@@ -918,47 +785,42 @@ export default function Dashboard({ data, setData }) {
                                         <Label htmlFor="dashboard-saver-search">Search Saver</Label>
                                         <div className="relative">
                                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                            <Input
-                                                id="dashboard-saver-search"
-                                                value={saverSearch}
-                                                onChange={(e) => { setSaverSearch(e.target.value); setSelectedSaver(null); }}
-                                                className="pl-10"
-                                                placeholder="Type saver name to search"
-                                            />
+                                            <Input id="dashboard-saver-search" value={saverSearch}
+                                                   onChange={(e) => { setSaverSearch(e.target.value); setSelectedSaver(null); }}
+                                                   className="pl-10" placeholder="Type saver name to search" />
                                         </div>
                                         {saverSearch.trim() && !selectedSaver && (
                                             <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200">
                                                 {filteredSavers.length === 0 ? (
                                                     <div className="px-4 py-3 text-sm text-slate-500">No matching saver found.</div>
                                                 ) : filteredSavers.map((saver) => (
-                                                    <button key={saver.id} type="button" onClick={() => { setSelectedSaver(saver); setSaverSearch(saver.name); }} className="flex w-full px-4 py-3 text-left text-sm transition hover:bg-slate-50">
+                                                    <button key={saver.id} type="button"
+                                                            onClick={() => { setSelectedSaver(saver); setSaverSearch(saver.name); }}
+                                                            className="flex w-full px-4 py-3 text-left text-sm transition hover:bg-slate-50">
                                                         {saver.name}
                                                     </button>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
-
                                     <div className="grid gap-2">
                                         <Label>Selected Saver</Label>
                                         <Input value={selectedSaver ? `${selectedSaver.name} — Balance: ${formatCurrency(selectedSaver.balance)}` : ""} disabled />
                                     </div>
-
                                     <div className="grid gap-2">
                                         <Label htmlFor="dashboard-amount">Amount</Label>
                                         <Input id="dashboard-amount" inputMode="decimal" value={formatNumberWithCommas(amount)} onChange={handleMoneyInputChange(setAmount)} placeholder="e.g. 500,000" />
                                     </div>
-
                                     <div className="grid gap-2">
                                         <Label htmlFor="paymentMethod">Payment Method</Label>
                                         <select id="paymentMethod" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200">
                                             {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                                         </select>
                                     </div>
-
                                     <div className="flex justify-end gap-2 pt-2">
                                         <Button variant="outline" onClick={closePanel} type="button">Cancel</Button>
-                                        <Button onClick={activePanel === QUICK_ACTIONS.RECORD_DEPOSIT ? handleRecordDeposit : handleRecordWithdrawal} disabled={isSaving} type="button" className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md">
+                                        <Button onClick={activePanel === QUICK_ACTIONS.RECORD_DEPOSIT ? handleRecordDeposit : handleRecordWithdrawal}
+                                                disabled={isSaving} type="button" className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md">
                                             {isSaving
                                                 ? activePanel === QUICK_ACTIONS.RECORD_DEPOSIT ? "Recording..." : "Processing..."
                                                 : activePanel === QUICK_ACTIONS.RECORD_DEPOSIT ? "Record Deposit" : "Record Withdrawal"}
@@ -1016,7 +878,6 @@ export default function Dashboard({ data, setData }) {
                                             </div>
                                         </>
                                     )}
-
                                     {loanFlowStep === "collateral" && (
                                         <>
                                             <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Loan recorded successfully</div>
@@ -1048,7 +909,6 @@ export default function Dashboard({ data, setData }) {
                                             </div>
                                         </>
                                     )}
-
                                     {loanFlowStep === "guarantor" && (
                                         <>
                                             <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Register guarantor</div>

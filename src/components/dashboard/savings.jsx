@@ -72,10 +72,6 @@ function sanitizeMoneyInput(value) {
     return `${parts[0]}.${parts.slice(1).join("")}`;
 }
 
-/**
- * Fetch ALL pages from a Spring-paginated endpoint.
- * Handles both plain arrays and Page objects { content, totalPages }.
- */
 async function fetchAllPages(fetchFn, pageSize = 50) {
     let page = 0;
     let allItems = [];
@@ -595,6 +591,7 @@ export default function Savings({ setData, initialAction }) {
     const [isLoadingTx, setIsLoadingTx] = useState(false);
     const [txPage, setTxPage] = useState(1);
     const [txSearch, setTxSearch] = useState("");
+    const [txType, setTxType] = useState(""); // "" | "DEPOSIT" | "WITHDRAWAL"
     const [txDateFrom, setTxDateFrom] = useState("");
     const [txDateTo, setTxDateTo] = useState("");
 
@@ -636,9 +633,7 @@ export default function Savings({ setData, initialAction }) {
             });
             setAllTransactions(all);
             setTxPage(1);
-        } catch {
-            // silently fail — endpoint may not exist yet
-        } finally {
+        } catch { /* empty */ } finally {
             setIsLoadingTx(false);
         }
     }, []);
@@ -674,14 +669,14 @@ export default function Savings({ setData, initialAction }) {
     );
 
     useEffect(() => { setSaverPage(1); }, [saverSearch]);
-    useEffect(() => { setTxPage(1); }, [txSearch, txDateFrom, txDateTo]);
+    useEffect(() => { setTxPage(1); }, [txSearch, txType, txDateFrom, txDateTo]);
 
     const activeSavers = useMemo(() => allSavers.filter((s) => {
         const st = String(s.status || "").toLowerCase();
         return st === "active" || st === "approved";
     }), [allSavers]);
 
-    // ── transactions — derived (identical pattern to savers) ─────────────────
+    // ── transactions — derived ────────────────────────────────────────────────
 
     const filteredTransactions = useMemo(() => {
         let list = allTransactions;
@@ -689,6 +684,12 @@ export default function Savings({ setData, initialAction }) {
         if (q) {
             list = list.filter((tx) =>
                 (tx.saverName || tx.customerName || "").toLowerCase().includes(q)
+            );
+        }
+        // ── type filter ──
+        if (txType) {
+            list = list.filter((tx) =>
+                String(tx.transactionType || tx.type || "").toUpperCase() === txType
             );
         }
         if (txDateFrom) {
@@ -706,7 +707,7 @@ export default function Savings({ setData, initialAction }) {
             });
         }
         return list;
-    }, [allTransactions, txSearch, txDateFrom, txDateTo]);
+    }, [allTransactions, txSearch, txType, txDateFrom, txDateTo]);
 
     const txTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / TX_PER_PAGE));
     const pagedTransactions = filteredTransactions.slice(
@@ -763,6 +764,8 @@ export default function Savings({ setData, initialAction }) {
     };
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    const hasActiveFilters = txSearch || txType || txDateFrom || txDateTo;
 
     return (
         <div className="space-y-6">
@@ -893,6 +896,7 @@ export default function Savings({ setData, initialAction }) {
                     <CardContent className="space-y-4">
                         {/* search controls */}
                         <div className="flex flex-wrap gap-3">
+                            {/* name search */}
                             <div className="relative flex-1 min-w-[180px]">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                 <Input
@@ -902,6 +906,19 @@ export default function Savings({ setData, initialAction }) {
                                     placeholder="Search by saver name"
                                 />
                             </div>
+
+                            {/* transaction type dropdown */}
+                            <select
+                                value={txType}
+                                onChange={(e) => setTxType(e.target.value)}
+                                className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                            >
+                                <option value="">All Types</option>
+                                <option value="DEPOSIT">Deposit</option>
+                                <option value="WITHDRAWAL">Withdrawal</option>
+                            </select>
+
+                            {/* date range */}
                             <div className="flex items-center gap-2">
                                 <Input
                                     type="date"
@@ -918,10 +935,10 @@ export default function Savings({ setData, initialAction }) {
                                     className="w-36 text-sm"
                                     title="To date"
                                 />
-                                {(txDateFrom || txDateTo || txSearch) && (
+                                {hasActiveFilters && (
                                     <button
                                         type="button"
-                                        onClick={() => { setTxSearch(""); setTxDateFrom(""); setTxDateTo(""); }}
+                                        onClick={() => { setTxSearch(""); setTxType(""); setTxDateFrom(""); setTxDateTo(""); }}
                                         className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-800 whitespace-nowrap"
                                     >
                                         Clear
@@ -1000,7 +1017,7 @@ export default function Savings({ setData, initialAction }) {
                             </TableBody>
                         </Table>
 
-                        {/* pagination — mirrors savers exactly */}
+                        {/* pagination */}
                         <div className="flex items-center justify-between pt-2 text-sm text-slate-500">
                             <span>
                                 {filteredTransactions.length === 0
