@@ -25,6 +25,8 @@ import {
 } from "../../services/adminServices";
 import { getLoggedInAdminId } from "../../lib/auth";
 
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const INVESTMENTS_PER_PAGE = 10;
@@ -36,7 +38,7 @@ const NAV_BTN =
 
 const INVESTOR_TYPES = [
     { value: "INDIVIDUAL",  label: "Individual"  },
-    { value: "PARTNERSHIP", label: "Partnership" },
+    { value: "INSTITUTIONAL", label: "Institutional" },
 ];
 
 // InvestmentStatus enum values
@@ -447,8 +449,11 @@ function RegisterInvestorModal({ onClose, onSuccess }) {
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="inv-phoneNo">Phone Number</Label>
-                        <Input id="inv-phoneNo" name="phoneNo"
-                               value={form.phoneNo} onChange={handleChange} />
+                        <PhoneInput international defaultCountry="NG"
+                                    value={form.phoneNo}
+                                    onChange={(val) => setForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                    className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                        />
                     </div>
                     <div className="grid gap-2 md:col-span-2">
                         <Label htmlFor="inv-investorType">Investor Type</Label>

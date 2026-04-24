@@ -32,6 +32,8 @@ import {
 } from "../../services/customerServices";
 import { getLoggedInAdminId } from "../../lib/auth";
 import { PAYMENT_METHODS } from "../../constants/paymentMethods";
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 
 const QUICK_ACTIONS = {
     REGISTER_SAVER: "register_saver",
@@ -729,33 +731,54 @@ export default function Dashboard({ data, setData }) {
                                                 { label: "Middle Name", name: "middleName" },
                                                 { label: "Last Name", name: "lastName" },
                                                 { label: "Email", name: "email", type: "email" },
-                                                { label: "Phone Number", name: "phoneNo" },
-                                                { label: "WhatsApp Number", name: "whatsappNo" },
                                             ].map(({ label, name, type }) => (
                                                 <div key={name} className="grid gap-2">
                                                     <Label htmlFor={name}>{label}</Label>
-                                                    <Input id={name} name={name} type={type || "text"} value={saverForm[name]} onChange={handleSaverInputChange} />
+                                                    <Input id={name} name={name} type={type || "text"}
+                                                           value={saverForm[name]} onChange={handleSaverInputChange} />
                                                 </div>
                                             ))}
+                                            <div className="grid gap-2">
+                                                <Label>Phone Number</Label>
+                                                <PhoneInput international defaultCountry="NG"
+                                                            value={saverForm.phoneNo}
+                                                            onChange={(val) => setSaverForm((prev) => ({ ...prev, phoneNo: val || "" }))}
+                                                            className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                                />
+                                            </div>
+
+                                            {/* WhatsApp — E.164 with country picker */}
+                                            <div className="grid gap-2">
+                                                <Label>WhatsApp Number</Label>
+                                                <PhoneInput
+                                                    international
+                                                    defaultCountry="NG"
+                                                    value={saverForm.whatsappNo}
+                                                    onChange={(val) => setSaverForm((prev) => ({ ...prev, whatsappNo: val || "" }))}
+                                                    className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                                />
+                                            </div>
+
                                             <div className="grid gap-2 md:col-span-2">
                                                 <Label htmlFor="address">Address</Label>
                                                 <Input id="address" name="address" value={saverForm.address} onChange={handleSaverInputChange} />
                                             </div>
                                             <div className="md:col-span-2 flex justify-end gap-2 pt-2">
                                                 <Button variant="outline" onClick={closePanel} type="button">Cancel</Button>
-                                                <Button onClick={handleRegisterSaver} disabled={isSaving} type="button" className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md">
+                                                <Button onClick={handleRegisterSaver} disabled={isSaving} type="button"
+                                                        className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md">
                                                     {isSaving ? "Registering..." : "Continue"}
                                                 </Button>
                                             </div>
                                         </div>
                                     )}
+
                                     {registerStep === "next_of_kin" && (
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {[
                                                 { label: "First Name", name: "firstName", id: "nokFirstName" },
                                                 { label: "Middle Name", name: "middleName", id: "nokMiddleName" },
                                                 { label: "Last Name", name: "lastName", id: "nokLastName" },
-                                                { label: "Phone Number", name: "phoneNo", id: "nokPhoneNo" },
                                                 { label: "Relationship", name: "relationship", id: "nokRelationship" },
                                             ].map(({ label, name, id }) => (
                                                 <div key={name} className="grid gap-2">
@@ -763,6 +786,14 @@ export default function Dashboard({ data, setData }) {
                                                     <Input id={id} name={name} value={nextOfKinForm[name]} onChange={handleNextOfKinInputChange} />
                                                 </div>
                                             ))}
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="nokPhoneNo">Phone Number</Label>
+                                                <PhoneInput international defaultCountry="NG"
+                                                            value={nextOfKinForm.phoneNo}
+                                                            onChange={(val) => setNextOfKinForm((prev) => ({ ...prev, phoneNo: val || "" }))}
+                                                            className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                                />
+                                            </div>
                                             <div className="grid gap-2 md:col-span-2">
                                                 <Label htmlFor="nokAddress">Address</Label>
                                                 <Input id="nokAddress" name="address" value={nextOfKinForm.address} onChange={handleNextOfKinInputChange} />
@@ -840,8 +871,12 @@ export default function Dashboard({ data, setData }) {
                                                     <Input id="borrowerName" name="borrowerName" placeholder="e.g. John Doe" value={loanDisbursementForm.borrowerName} onChange={handleLoanDisbursementInputChange} />
                                                 </div>
                                                 <div className="grid gap-2">
-                                                    <Label htmlFor="borrowerPhoneNumber">Phone Number <span className="text-red-500">*</span></Label>
-                                                    <Input id="borrowerPhoneNumber" name="borrowerPhoneNumber" placeholder="e.g. +2348012345678" value={loanDisbursementForm.borrowerPhoneNumber} onChange={handleLoanDisbursementInputChange} />
+                                                    <Label>Phone Number <span className="text-red-500">*</span></Label>
+                                                    <PhoneInput international defaultCountry="NG"
+                                                                value={loanDisbursementForm.borrowerPhoneNumber}
+                                                                onChange={(val) => setLoanDisbursementForm((prev) => ({ ...prev, borrowerPhoneNumber: val || "" }))}
+                                                                className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                                    />
                                                 </div>
                                                 <div className="grid gap-2 md:col-span-2">
                                                     <Label htmlFor="borrowerEmail">Email Address</Label>
@@ -917,8 +952,14 @@ export default function Dashboard({ data, setData }) {
                                                     { label: "First Name", name: "firstName", id: "guarantorFirstName" },
                                                     { label: "Middle Name", name: "middleName", id: "guarantorMiddleName" },
                                                     { label: "Last Name", name: "lastName", id: "guarantorLastName" },
-                                                    { label: "Phone Number", name: "phoneNo", id: "guarantorPhoneNo" },
-                                                ].map(({ label, name, id }) => (
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="guarantorPhoneNo">Phone Number</Label>
+                                                        <PhoneInput international defaultCountry="NG"
+                                                                    value={guarantorForm.phoneNo}
+                                                                    onChange={(val) => setGuarantorForm((prev) => ({ ...prev, phoneNo: val || "" }))}
+                                                                    className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                                        />
+                                                    </div>                                                ].map(({ label, name, id }) => (
                                                     <div key={name} className="grid gap-2">
                                                         <Label htmlFor={id}>{label}</Label>
                                                         <Input id={id} name={name} value={guarantorForm[name]} onChange={handleGuarantorInputChange} />

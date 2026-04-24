@@ -25,7 +25,8 @@ import {
 } from "../../services/adminServices";
 import { getLoggedInAdminId } from "../../lib/auth";
 import { PAYMENT_METHODS } from "../../constants/paymentMethods";
-
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const LOANS_PER_PAGE = 10;
@@ -682,13 +683,20 @@ function LoanDetailModal({ loan, onClose, onReload }) {
                                     { label: "First Name", name: "firstName" },
                                     { label: "Middle Name", name: "middleName" },
                                     { label: "Last Name", name: "lastName" },
-                                    { label: "Phone Number", name: "phoneNo" },
                                 ].map(({ label, name }) => (
                                     <div key={name} className="grid gap-1">
                                         <Label>{label}</Label>
                                         <Input name={name} value={guarantorForm[name]} onChange={handleGuarantorChange} />
                                     </div>
                                 ))}
+                                <div className="grid gap-1">
+                                    <Label>Phone Number</Label>
+                                    <PhoneInput international defaultCountry="NG"
+                                                value={guarantorForm.phoneNo}
+                                                onChange={(val) => setGuarantorForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                                className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                    />
+                                </div>
                                 <div className="grid gap-1 md:col-span-2">
                                     <Label>Address</Label>
                                     <Input name="address" value={guarantorForm.address} onChange={handleGuarantorChange} />
@@ -1001,7 +1009,11 @@ function DisbursementModal({ onClose, onSuccess }) {
                         </div>
                         <div className="grid gap-2">
                             <Label>Phone Number <span className="text-red-500">*</span></Label>
-                            <Input name="borrowerPhoneNumber" value={loanForm.borrowerPhoneNumber} onChange={handleLoanChange} />
+                            <PhoneInput international defaultCountry="NG"
+                                        value={loanForm.borrowerPhoneNumber}
+                                        onChange={(val) => setLoanForm((p) => ({ ...p, borrowerPhoneNumber: val || "" }))}
+                                        className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                            />
                         </div>
                         <div className="grid gap-2 md:col-span-2">
                             <Label>Email Address</Label>
@@ -1090,13 +1102,20 @@ function DisbursementModal({ onClose, onSuccess }) {
                             { label: "First Name", name: "firstName" },
                             { label: "Middle Name", name: "middleName" },
                             { label: "Last Name", name: "lastName" },
-                            { label: "Phone Number", name: "phoneNo" },
                         ].map(({ label, name }) => (
                             <div key={name} className="grid gap-2">
                                 <Label>{label}</Label>
                                 <Input name={name} value={guarantorForm[name]} onChange={handleGuarantorChange} />
                             </div>
                         ))}
+                        <div className="grid gap-2">
+                            <Label>Phone Number</Label>
+                            <PhoneInput international defaultCountry="NG"
+                                        value={guarantorForm.phoneNo}
+                                        onChange={(val) => setGuarantorForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                        className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                            />
+                        </div>
                         <div className="grid gap-2 md:col-span-2">
                             <Label>Address</Label>
                             <Input name="address" value={guarantorForm.address} onChange={handleGuarantorChange} />

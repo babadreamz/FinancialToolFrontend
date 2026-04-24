@@ -91,3 +91,20 @@ export const getReturnsOnInvestment = async (investmentId) => {
     const response = await api.get(`/admin/${investmentId}/returns/all`);
     return response.data;
 };
+
+export const generateStatementPdf = async (customerId, startDate, endDate) => {
+    const response = await api.get("/admin/customer/statement/pdf", {
+        params: { customerId, startDate, endDate },
+        responseType: "blob",
+    });
+    return response.data;
+};
+export const sendStatementWhatsApp = async (customerId, startDate, endDate) => {
+    await api.post("/admin/customer/statement/send-whatsapp", null, {
+        params: { customerId, startDate, endDate },
+    });
+};
+export const sendMonthlyStatementToAll = async () => {
+    const response = await api.post("/admin/customer/statement/send-whatsapp/all");
+    return response.data;
+};

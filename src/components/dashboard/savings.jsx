@@ -25,6 +25,9 @@ import {
 import { getLoggedInAdminId } from "../../lib/auth";
 import { PAYMENT_METHODS } from "../../constants/paymentMethods";
 
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
+
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const SAVERS_PER_PAGE = 10;
@@ -188,7 +191,6 @@ function NokModal({ saver, onClose, onSaved }) {
                                 { label: "First Name", name: "firstName" },
                                 { label: "Middle Name", name: "middleName" },
                                 { label: "Last Name", name: "lastName" },
-                                { label: "Phone Number", name: "phoneNo" },
                                 { label: "Relationship", name: "relationship" },
                             ].map(({ label, name }) => (
                                 <div key={name} className="grid gap-1">
@@ -196,6 +198,14 @@ function NokModal({ saver, onClose, onSaved }) {
                                     <Input id={`nok-${name}`} name={name} value={form[name]} onChange={handleChange} />
                                 </div>
                             ))}
+                            <div className="grid gap-2">
+                                <Label>Phone Number</Label>
+                                <PhoneInput international defaultCountry="NG"
+                                            value={saverForm.phoneNo}
+                                            onChange={(val) => setSaverForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                            className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                />
+                            </div>
                             <div className="grid gap-1 md:col-span-2">
                                 <Label htmlFor="nok-address">Address</Label>
                                 <Input id="nok-address" name="address" value={form.address} onChange={handleChange} />
@@ -520,8 +530,6 @@ function RegisterSaverModal({ onClose, onSuccess }) {
                             { label: "Middle Name", name: "middleName" },
                             { label: "Last Name", name: "lastName", required: true },
                             { label: "Email", name: "email", type: "email" },
-                            { label: "Phone Number", name: "phoneNo" },
-                            { label: "WhatsApp Number", name: "whatsappNo" },
                         ].map(({ label, name, type, required }) => (
                             <div key={name} className="grid gap-2">
                                 <Label htmlFor={`reg-${name}`}>
@@ -531,6 +539,27 @@ function RegisterSaverModal({ onClose, onSuccess }) {
                                        value={saverForm[name]} onChange={handleSaverChange} />
                             </div>
                         ))}
+                        <div className="grid gap-2">
+                            <Label>Phone Number</Label>
+                            <PhoneInput international defaultCountry="NG"
+                                        value={nokForm.phoneNo}
+                                        onChange={(val) => setNokForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                        className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                            />
+                        </div>
+
+                        {/* WhatsApp — E.164 with country picker */}
+                        <div className="grid gap-2">
+                            <Label>WhatsApp Number</Label>
+                            <PhoneInput
+                                international
+                                defaultCountry="NG"
+                                value={saverForm.whatsappNo}
+                                onChange={(val) => setSaverForm((p) => ({ ...p, whatsappNo: val || "" }))}
+                                className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                            />
+                        </div>
+
                         <div className="grid gap-2 md:col-span-2">
                             <Label htmlFor="reg-address">Address <span className="text-red-500">*</span></Label>
                             <Input id="reg-address" name="address" value={saverForm.address} onChange={handleSaverChange} />
@@ -550,7 +579,6 @@ function RegisterSaverModal({ onClose, onSuccess }) {
                             { label: "First Name", name: "firstName" },
                             { label: "Middle Name", name: "middleName" },
                             { label: "Last Name", name: "lastName" },
-                            { label: "Phone Number", name: "phoneNo" },
                             { label: "Relationship", name: "relationship" },
                         ].map(({ label, name }) => (
                             <div key={name} className="grid gap-2">
@@ -559,6 +587,15 @@ function RegisterSaverModal({ onClose, onSuccess }) {
                                        value={nokForm[name]} onChange={handleNokChange} />
                             </div>
                         ))}
+                        <div className="grid gap-1">
+                            <Label>Phone Number</Label>
+                            <PhoneInput international defaultCountry="NG"
+                                        value={form.phoneNo}
+                                        onChange={(val) => setForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                        className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                            />
+                        </div>
+
                         <div className="grid gap-2 md:col-span-2">
                             <Label htmlFor="nok2-address">Address</Label>
                             <Input id="nok2-address" name="address" value={nokForm.address} onChange={handleNokChange} />
