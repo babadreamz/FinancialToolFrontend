@@ -883,7 +883,7 @@ export default function Investments({ setData, initialAction }) {
         setModal(null);
         setSuccessMessage("Investor registered successfully.");
         setTimeout(() => setSuccessMessage(""), 4000);
-        // No extra fetch needed — investor name appears on next investment recorded
+        await loadInvestors();
     };
 
     const handleInvestmentSuccess = async () => {

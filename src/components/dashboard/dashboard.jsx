@@ -949,22 +949,23 @@ export default function Dashboard({ data, setData }) {
                                             <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Register guarantor</div>
                                             <div className="grid gap-4 md:grid-cols-2">
                                                 {[
-                                                    { label: "First Name", name: "firstName", id: "guarantorFirstName" },
+                                                    { label: "First Name",  name: "firstName",  id: "guarantorFirstName"  },
                                                     { label: "Middle Name", name: "middleName", id: "guarantorMiddleName" },
-                                                    { label: "Last Name", name: "lastName", id: "guarantorLastName" },
-                                                    <div className="grid gap-2">
-                                                        <Label htmlFor="guarantorPhoneNo">Phone Number</Label>
-                                                        <PhoneInput international defaultCountry="NG"
-                                                                    value={guarantorForm.phoneNo}
-                                                                    onChange={(val) => setGuarantorForm((prev) => ({ ...prev, phoneNo: val || "" }))}
-                                                                    className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
-                                                        />
-                                                    </div>                                                ].map(({ label, name, id }) => (
+                                                    { label: "Last Name",   name: "lastName",   id: "guarantorLastName"   },
+                                                ].map(({ label, name, id }) => (
                                                     <div key={name} className="grid gap-2">
                                                         <Label htmlFor={id}>{label}</Label>
                                                         <Input id={id} name={name} value={guarantorForm[name]} onChange={handleGuarantorInputChange} />
                                                     </div>
                                                 ))}
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="guarantorPhoneNo">Phone Number</Label>
+                                                    <PhoneInput international defaultCountry="NG"
+                                                                value={guarantorForm.phoneNo}
+                                                                onChange={(val) => setGuarantorForm((prev) => ({ ...prev, phoneNo: val || "" }))}
+                                                                className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
+                                                    />
+                                                </div>
                                                 <div className="grid gap-2 md:col-span-2">
                                                     <Label htmlFor="guarantorAddress">Address</Label>
                                                     <Input id="guarantorAddress" name="address" value={guarantorForm.address} onChange={handleGuarantorInputChange} />
@@ -982,7 +983,8 @@ export default function Dashboard({ data, setData }) {
                                                 <Button variant="outline" type="button" onClick={handleFinishLoanFlow}>
                                                     {guarantorAddedCount > 0 ? "Proceed" : "Proceed Without Adding Guarantor"}
                                                 </Button>
-                                                <Button onClick={handleAddGuarantor} disabled={isSaving} type="button" className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md">
+                                                <Button onClick={handleAddGuarantor} disabled={isSaving} type="button"
+                                                        className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md">
                                                     {isSaving ? "Saving..." : "Add Guarantor"}
                                                 </Button>
                                             </div>

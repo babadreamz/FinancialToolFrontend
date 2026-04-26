@@ -233,6 +233,20 @@ function LoanRepaymentsModal({ loan, onClose, onRepaymentCancelled }) {
         page * REPAYMENTS_PER_PAGE,
     );
 
+    useEffect(() => {
+        setRepayments((prev) => {
+            const fresh = [...(loan.loanRepayments || [])].sort((a, b) =>
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            );
+            return fresh.map((sr) => {
+                const local = prev.find(
+                    (p) => (p.id || p.repaymentId) === (sr.id || sr.repaymentId)
+                );
+                return local?.cancelled ? { ...sr, cancelled: true } : sr;
+            });
+        });
+    }, [loan.loanRepayments]);
+
     const handleCancelRepayment = async (reason) => {
         if (!cancelTarget) return;
         const recorderId = getLoggedInAdminId();
@@ -303,7 +317,12 @@ function LoanRepaymentsModal({ loan, onClose, onRepaymentCancelled }) {
                                     </TableRow>
                                 ) : paged.map((r, i) => {
                                     const rId = r.id || r.repaymentId || i;
-                                    const isCancelled = Boolean(r.cancelled || String(r.status || "").toUpperCase() === "CANCELLED");
+                                    const isCancelled = Boolean(
+                                        r.cancelled ||
+                                        r.isCancelled ||
+                                        String(r.status || "").toUpperCase() === "CANCELLED" ||
+                                        String(r.repaymentStatus || "").toUpperCase() === "CANCELLED"
+                                    );
                                     return (
                                         <TableRow key={rId} className={isCancelled ? "opacity-60" : ""}>
                                             <TableCell className={isCancelled ? "line-through text-slate-400" : ""}>
@@ -1184,8 +1203,10 @@ export default function Loans({ setData, initialAction }) {
             const mapped = all.map(mapLoan);
             setAllLoans(mapped);
             setData?.((prev) => ({ ...prev, loans: mapped }));
+            return mapped;
         } catch (err) {
             setGlobalError(err?.response?.data?.message || "Failed to load loans.");
+            return null;
         } finally {
             setIsLoadingLoans(false);
         }
@@ -1301,6 +1322,14 @@ export default function Loans({ setData, initialAction }) {
             if (fresh) setDetailLoan(fresh);
         }
     }, [detailLoan?.id, setData]);
+
+    const handleRepaymentCancelled = useCallback(async () => {
+        const mapped = await loadLoans();
+        if (mapped && repaymentsLoan?.id) {
+            const fresh = mapped.find((l) => l.id === repaymentsLoan.id);
+            if (fresh) setRepaymentsLoan(fresh);
+        }
+    }, [loadLoans, repaymentsLoan?.id]);
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -1600,7 +1629,7 @@ export default function Loans({ setData, initialAction }) {
                 <LoanRepaymentsModal
                     loan={repaymentsLoan}
                     onClose={() => setRepaymentsLoan(null)}
-                    onRepaymentCancelled={loadLoans}
+                    onRepaymentCancelled={handleRepaymentCancelled}
                 />
             )}
             {cancelDisbursementTarget && (
