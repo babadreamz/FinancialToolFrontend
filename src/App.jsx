@@ -1,8 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useSelector } from "react-redux";
-import LoginPage from "./pages/AdminLogin";
-import DashboardPage from "./pages/DashboardPage";
-import AuthWatcher from "./components/AuthWatcher";
+import LoginPage from "./pages/adminLogin";
+import DashboardPage from "./pages/dashboardPage";
+import AuthWatcher from "./components/authWatcher";
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated, token } = useSelector((state) => state.auth);
