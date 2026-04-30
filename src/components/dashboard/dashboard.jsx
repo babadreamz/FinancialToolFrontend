@@ -411,7 +411,12 @@ export default function Dashboard({ data, setData }) {
     const handleRegisterSaver = async () => {
         resetMessages();
         if (!saverForm.firstName.trim() || !saverForm.lastName.trim() || !saverForm.address.trim()) {
-            setFormError("First name, last name and address are required."); return;
+            setFormError("First name, last name and address are required.");
+            return;
+        }
+        if (!saverForm.phoneNo || saverForm.phoneNo.trim().length < 7) {
+            setFormError("A valid phone number is required.");
+            return;
         }
         try {
             setIsSaving(true);
@@ -434,6 +439,10 @@ export default function Dashboard({ data, setData }) {
         if (!nextOfKinForm.firstName.trim() || !nextOfKinForm.lastName.trim() ||
             !nextOfKinForm.phoneNo.trim() || !nextOfKinForm.address.trim() || !nextOfKinForm.relationship.trim()) {
             setFormError("All next of kin required fields must be filled."); return;
+        }
+        if (!nextOfKinForm.phoneNo || nextOfKinForm.phoneNo.trim().length < 7) {
+            setFormError("A valid phone number is required for next of kin.");
+            return;
         }
         if (!nextOfKinForm.customerId && !registeredCustomerId) {
             setFormError("Customer ID is missing. Please register saver again."); return;
@@ -799,9 +808,26 @@ export default function Dashboard({ data, setData }) {
                                                 <Input id="nokAddress" name="address" value={nextOfKinForm.address} onChange={handleNextOfKinInputChange} />
                                             </div>
                                             <div className="md:col-span-2 flex justify-end gap-2 pt-2">
-                                                <Button variant="outline" onClick={() => { setFormError(""); setRegisterStep("saver"); }} type="button">Back</Button>
-                                                <Button onClick={handleAddNextOfKin} disabled={isSaving} type="button" className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md">
-                                                    {isSaving ? "Saving..." : "Finish"}
+                                                <Button variant="outline" onClick={() => { setFormError(""); setRegisterStep("saver"); }} type="button">
+                                                    Back
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    type="button"
+                                                    onClick={() => {
+                                                        closePanel();
+                                                        setSuccessMessage("Saver registered successfully.");
+                                                    }}
+                                                >
+                                                    Skip &amp; Finish
+                                                </Button>
+                                                <Button
+                                                    onClick={handleAddNextOfKin}
+                                                    disabled={isSaving}
+                                                    type="button"
+                                                    className="transition-all duration-200 hover:bg-slate-700 hover:scale-[1.02] hover:shadow-md"
+                                                >
+                                                    {isSaving ? "Saving..." : "Add Next of Kin"}
                                                 </Button>
                                             </div>
                                         </div>

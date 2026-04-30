@@ -201,8 +201,8 @@ function NokModal({ saver, onClose, onSaved }) {
                             <div className="grid gap-2">
                                 <Label>Phone Number</Label>
                                 <PhoneInput international defaultCountry="NG"
-                                            value={saverForm.phoneNo}
-                                            onChange={(val) => setSaverForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                            value={form.phoneNo}
+                                            onChange={(val) => setForm((p) => ({ ...p, phoneNo: val || "" }))}
                                             className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
                                 />
                             </div>
@@ -542,8 +542,8 @@ function RegisterSaverModal({ onClose, onSuccess }) {
                         <div className="grid gap-2">
                             <Label>Phone Number</Label>
                             <PhoneInput international defaultCountry="NG"
-                                        value={nokForm.phoneNo}
-                                        onChange={(val) => setNokForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                        value={saverForm.phoneNo}
+                                        onChange={(val) => setSaverForm((p) => ({ ...p, phoneNo: val || "" }))}
                                         className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
                             />
                         </div>
@@ -590,8 +590,8 @@ function RegisterSaverModal({ onClose, onSuccess }) {
                         <div className="grid gap-1">
                             <Label>Phone Number</Label>
                             <PhoneInput international defaultCountry="NG"
-                                        value={form.phoneNo}
-                                        onChange={(val) => setForm((p) => ({ ...p, phoneNo: val || "" }))}
+                                        value={nokForm.phoneNo}
+                                        onChange={(val) => setNokForm((p) => ({ ...p, phoneNo: val || "" }))}
                                         className="flex h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm focus-within:border-slate-400 focus-within:ring-2 focus-within:ring-slate-200"
                             />
                         </div>
