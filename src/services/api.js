@@ -16,7 +16,6 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// RESPONSE INTERCEPTOR (handle auth errors)
 api.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -24,7 +23,7 @@ api.interceptors.response.use(
             localStorage.removeItem("saye_auth");
             localStorage.removeItem("saye_token");
             localStorage.removeItem("saye_user");
-            window.location.href = "/";
+            window.location.href = "/login";
         }
 
         return Promise.reject(error);

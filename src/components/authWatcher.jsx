@@ -24,7 +24,7 @@ const AuthWatcher = () => {
 
         if (timeLeft <= 0) {
             dispatch(logout());
-            navigate("/");
+            navigate("/login");
             return;
         }
 

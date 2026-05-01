@@ -108,3 +108,17 @@ export const sendMonthlyStatementToAll = async () => {
     const response = await api.post("/admin/customer/statement/send-whatsapp/all");
     return response.data;
 };
+
+export async function getAdminProfile() {
+    const response = await api.get("/admin/profile");
+    return response.data;
+}
+
+export async function changeAdminPassword({ id, password, newPassword }) {
+    const response = await api.put("/admin/password/change", {
+        id,
+        password,
+        newPassword,
+    });
+    return response.data;
+}
